@@ -210,3 +210,5 @@ raw_data/
 *.pq
 *.parquet
 clean_data/all_users_meta.csv
+.DS_Store
+.idea/

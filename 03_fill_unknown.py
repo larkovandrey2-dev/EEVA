@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 
 CLEAN_DIR = "clean_data"
-df = pd.read_csv(f"{CLEAN_DIR}/payments_step2_real.csv")
+df = pd.read_csv(f"{CLEAN_DIR}/payments_ready.csv")
 
-unknown_mask = (df['category_rus'] == 'Прочее')
+unknown_mask = (df['category_final'] == 'Прочее')
 unknown_brands = df.loc[unknown_mask, 'brand_id'].unique()
 
 categories = [
@@ -19,8 +19,8 @@ mapped_cats = np.random.choice(categories, size=len(unknown_brands), p=probs)
 fill_map = dict(zip(unknown_brands, mapped_cats))
 
 def final_cat(row):
-    if row['category_rus'] != 'Прочее':
-        return row['category_rus']
+    if row['category_final'] != 'Прочее':
+        return row['category_final']
     return fill_map.get(row['brand_id'], 'Прочее')
 
 df['category_final'] = df.apply(final_cat, axis=1)

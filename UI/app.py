@@ -183,11 +183,7 @@ def generate_llm_response(profile, recs, user_id):
 
 
 # UI
-
-
-
-# Центрированный логотип
-col1, col2, col3 = st.columns([1, 2, 1])
+col1, col2, col3 = st.columns([1, 2, 1]) # Центрированный логотип
 with col2:
     st.image("PSB_logo.png", width=540,)
 

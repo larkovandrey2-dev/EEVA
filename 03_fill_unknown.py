@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 CLEAN_DIR = "clean_data"
-df = pd.read_csv(f"{CLEAN_DIR}/payments_ready.csv")
+df = pd.read_csv(f"{CLEAN_DIR}/payments_repaired.csv")
 
 unknown_mask = (df['category_final'] == 'Прочее')
 unknown_brands = df.loc[unknown_mask, 'brand_id'].unique()
@@ -24,5 +24,5 @@ def final_cat(row):
     return fill_map.get(row['brand_id'], 'Прочее')
 
 df['category_final'] = df.apply(final_cat, axis=1)
-df.to_csv(f"{CLEAN_DIR}/payments_ready.csv", index=False)
+df.to_csv(f"{CLEAN_DIR}/payments_ready_final_markov.csv", index=False)
 print("Step 3 Done.")

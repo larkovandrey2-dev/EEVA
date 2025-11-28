@@ -6,7 +6,7 @@ print("🚀 [STEP 2] Обогащение реальными категория�
 
 CLEAN_DIR = "clean_data"
 RAW_DIR = "raw_data"
-PAY_FILE = f"{CLEAN_DIR}/payments_step1.csv"  # Твой файл с отобранными транзакциями
+PAY_FILE = f"{CLEAN_DIR}/payments_repaired.csv"  # Твой файл с отобранными транзакциями
 
 # 1. Читаем транзакции
 pay = pd.read_csv(PAY_FILE)
@@ -90,7 +90,7 @@ if unknown_count > 0:
 pay.rename(columns={'category_rus': 'category_final'}, inplace=True)
 
 # 6. Сохраняем
-OUT_FILE = f"{CLEAN_DIR}/payments_ready.csv"
+OUT_FILE = f"{CLEAN_DIR}/payments_ready_markov.csv"
 pay.to_csv(OUT_FILE, index=False)
 print(f"✅ Step 2 Done. Файл готов: {OUT_FILE}")
 print("   Колонки:", pay.columns.tolist())

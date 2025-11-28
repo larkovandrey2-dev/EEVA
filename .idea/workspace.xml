@@ -5,7 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="818e91d5-7c85-43a0-8815-af6e0f7e762d" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/first_run.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/02_real_categories.py" beforeDir="false" afterPath="$PROJECT_DIR$/02_real_categories.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/03_fill_unknown.py" beforeDir="false" afterPath="$PROJECT_DIR$/03_fill_unknown.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/engine.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/products.py" beforeDir="false" afterPath="$PROJECT_DIR$/products.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -45,15 +50,21 @@
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
     &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python tests.Python tests in test_run.py.executor&quot;: &quot;Run&quot;,
     &quot;Python.01_data_loader.executor&quot;: &quot;Run&quot;,
+    &quot;Python.02_real_categories.executor&quot;: &quot;Run&quot;,
+    &quot;Python.03_fill_unknown.executor&quot;: &quot;Run&quot;,
     &quot;Python.04_master.executor&quot;: &quot;Run&quot;,
     &quot;Python.2.executor&quot;: &quot;Run&quot;,
     &quot;Python.222.executor&quot;: &quot;Run&quot;,
     &quot;Python.better-clustoring.executor&quot;: &quot;Run&quot;,
+    &quot;Python.build_markov.executor&quot;: &quot;Run&quot;,
     &quot;Python.check_columns.executor&quot;: &quot;Run&quot;,
     &quot;Python.cloud_files.executor&quot;: &quot;Run&quot;,
+    &quot;Python.first_run.executor&quot;: &quot;Run&quot;,
     &quot;Python.local_files.executor&quot;: &quot;Run&quot;,
     &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.prepare_data.executor&quot;: &quot;Run&quot;,
     &quot;Python.test.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,

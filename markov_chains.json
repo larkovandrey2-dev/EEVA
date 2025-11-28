@@ -1,0 +1,46 @@
+{
+    "АЗС": {
+        "prediction": "Супермаркеты",
+        "probability": 0.46
+    },
+    "Аптеки": {
+        "prediction": "Супермаркеты",
+        "probability": 0.63
+    },
+    "Детские товары": {
+        "prediction": "Супермаркеты",
+        "probability": 0.56
+    },
+    "Дом и Ремонт": {
+        "prediction": "Супермаркеты",
+        "probability": 0.48
+    },
+    "Красота": {
+        "prediction": "Фастфуд",
+        "probability": 0.36
+    },
+    "Одежда и Спорт": {
+        "prediction": "Супермаркеты",
+        "probability": 0.48
+    },
+    "Путешествия": {
+        "prediction": "Супермаркеты",
+        "probability": 0.29
+    },
+    "Развлечения": {
+        "prediction": "Фастфуд",
+        "probability": 0.41
+    },
+    "Супермаркеты": {
+        "prediction": "Фастфуд",
+        "probability": 0.27
+    },
+    "Такси": {
+        "prediction": "Фастфуд",
+        "probability": 0.41
+    },
+    "Фастфуд": {
+        "prediction": "Супермаркеты",
+        "probability": 0.42
+    }
+}

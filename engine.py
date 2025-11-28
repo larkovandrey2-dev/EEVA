@@ -2,7 +2,7 @@ import json
 
 import pandas as pd
 import numpy as np
-from products import PSB_PRODUCTS, TREND_MAPPING, CONTEXT_OFFERS, PREDICTION_OFFERS
+from products import PSB_PRODUCTS, PREDICTION_OFFERS, TREND_MAPPING
 
 class RecommendationEngine:
     def __init__(self, user_file, trans_file):
@@ -18,7 +18,9 @@ class RecommendationEngine:
             print("Markov file not found. Branch 3 disabled.")
             self.markov = {}
         print("Launched")
+
     def _get_segment_info(self, cluster_id):
+        # Множитель x120 для красивых цифр (компенсация короткого периода)
         base_mult = 120.0
         mapping = {
             2: ("VIP", "💎 VIP / High-Spender", base_mult * 0.8),
@@ -32,21 +34,33 @@ class RecommendationEngine:
         return mapping.get(cluster_id, ("MIDDLE", "🛒 Mass Market", base_mult))
 
     def _predict_next(self, user_id):
-        """Ветка 3: Марков"""
+        """Ветка 3: Марков + Маппинг в продукты ПСБ"""
         user_tx = self.trans[self.trans['user_id'] == user_id]
         if user_tx.empty: return None, 0, None, []
 
-        last_action = user_tx.iloc[-1]['category_final']
+        # Последнее действие пользователя
+        last_action_raw = user_tx.iloc[-1]['category_final']
         recent_brands = user_tx['brand_id'].unique()[-3:].tolist()
 
-        pred = self.markov.get(last_action)
-        if pred:
-            return pred['prediction'], pred['probability'], last_action, recent_brands
-        return None, 0, last_action, recent_brands
+        # Предсказание Маркова (например: "Дом и Ремонт")
+        pred_data = self.markov.get(last_action_raw)
+
+        if pred_data:
+            pred_cat_raw = pred_data['prediction']  # "Дом и Ремонт"
+            prob = pred_data['probability']
+
+            # ВАЖНО: Превращаем категорию в Тренд ПСБ (через TREND_MAPPING)
+            # "Дом и Ремонт" -> "Ремонт"
+            # Если нет в маппинге, оставляем как есть
+            pred_trend = TREND_MAPPING.get(pred_cat_raw, pred_cat_raw)
+
+            return pred_trend, prob, last_action_raw, recent_brands
+
+        return None, 0, last_action_raw, recent_brands
 
     def recommend(self, user_id, time_of_day="Day"):
         """
-        НОВАЯ ЛОГИКА: Возвращает Primary (Профиль) и Secondary (Марков/Контекст)
+        ОРКЕСТРАТОР
         """
         if user_id not in self.users.index: return None
 
@@ -56,10 +70,10 @@ class RecommendationEngine:
         proj_spend = int(user_row['total_spend'] * mult)
 
         # 2. МАРКОВ (Паттерны)
-        pred_cat, prob, last_cat, brands = self._predict_next(user_id)
+        # Получаем уже нормализованный тренд (например, "Ремонт" или "Спорт и Красота")
+        pred_trend, prob, last_cat, brands = self._predict_next(user_id)
 
         # --- СБОРКА 1: ОСНОВНОЕ ПРЕДЛОЖЕНИЕ (Стратегия) ---
-        # Всегда берем из Ветки 1 (Кластер)
         primary_prod = PSB_PRODUCTS[seg_tag]["default"]
         primary_reason = f"Базовый продукт для профиля {seg_name}"
 
@@ -68,10 +82,11 @@ class RecommendationEngine:
         secondary_reason = ""
         insight_type = ""
 
-        # Вариант А: Есть сильный сигнал от Маркова
-        if pred_cat and prob > 0.15 and pred_cat in PREDICTION_OFFERS:
-            secondary_prod = PREDICTION_OFFERS[pred_cat]
-            secondary_reason = f"После '{last_cat}' часто ищут '{pred_cat}' ({int(prob * 100)}%)"
+        # Вариант А: Есть сильный сигнал от Маркова (и есть продукт ПСБ под этот тренд)
+        # Ищем предсказанный тренд в PREDICTION_OFFERS
+        if pred_trend and prob > 0.15 and pred_trend in PREDICTION_OFFERS:
+            secondary_prod = PREDICTION_OFFERS[pred_trend]
+            secondary_reason = f"После '{last_cat}' часто возникает потребность: '{pred_trend}' ({int(prob * 100)}%)"
             insight_type = "🔮 AI Prediction"
 
         # Вариант Б: Если Марков молчит -> Контекст (Ночь)
@@ -80,11 +95,17 @@ class RecommendationEngine:
             secondary_reason = "Клиент активен в ночное время"
             insight_type = "🌙 Context Rule"
 
-        # Вариант В: Если ничего нет -> Предлагаем Инвестиции/Вклад (Upsell)
+        # Вариант В: Умный Upsell (Инвестиции)
         elif "invest" in PSB_PRODUCTS[seg_tag]:
             secondary_prod = PSB_PRODUCTS[seg_tag]["invest"]
             secondary_reason = "Предложение для накопления капитала"
             insight_type = "💰 Smart Upsell"
+
+        # Заглушка, если вообще ничего не нашлось (редко)
+        else:
+            secondary_prod = {"name": "Система быстрых платежей", "desc": "Переводы без комиссии."}
+            secondary_reason = "Полезный сервис"
+            insight_type = "⚙️ Service"
 
         return {
             "user_id": user_id,
@@ -92,7 +113,6 @@ class RecommendationEngine:
             "stats": {"projected_month_spend": proj_spend},
             "recent_brands": brands,
 
-            # ДВА ПРОДУКТА ВМЕСТО ОДНОГО
             "primary": {
                 "type": "Strategic Offer",
                 "product": primary_prod,
@@ -107,9 +127,12 @@ class RecommendationEngine:
 
     def get_llm_prompt(self, data):
         if not data: return ""
+        sec = data['secondary']
         return f"""
-        Ты ассистент банка ПСБ.
-        Клиент: {data['segment_name']} (Тратит ~{data['stats']['projected_month_spend']} руб/мес).
-        Предложи продукт: "{data['product']['default']['name']}" ({data['product']['default']['desc']}).
-        Сделай это коротко и вежливо.
+        Ты ассистент банка ПСБ. Клиент: {data['segment_name']} (Прогноз: {data['stats']['projected_month_spend']} ₽).
+
+        1. Предложи ОСНОВНОЙ продукт: "{data['primary']['product']['name']}" ({data['primary']['product']['desc']}).
+        2. Добавь "КСТАТИ" (Cross-sell): "{sec['product']['name']}" ({sec['reason']}).
+
+        Сделай это одним связным, продающим сообщением. Упомяни выгоду.
         """

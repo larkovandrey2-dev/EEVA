@@ -3,12 +3,12 @@ import numpy as np
 from products import PSB_PRODUCTS, TREND_MAPPING, CONTEXT_OFFERS
 
 class RecommendationEngine:
-    def __init__(self, user_file, trans_file):
+    def __init__(self, user_file):
         print("Initializing Recommendation Engine V1.0")
         self.users = pd.read_csv(user_file).set_index("user_id")
         print("Launched")
     def _get_segment_info(self, cluster_id):
-        base_mult = 12.0
+        base_mult = 120.0
         mapping = {
             2: ("VIP", "💎 VIP / High-Spender", base_mult * 0.8),
             5: ("YOUTH", "🌙 Young & Active", base_mult * 1.2),
@@ -34,7 +34,7 @@ class RecommendationEngine:
             "segment_name": seg_name,
             "cluster_id": int(user_row['cluster_id']),
             "stats": {
-                    "real_48h_spend": int(user_row['total_spend']),
+                    "real_48h_spend": int(user_row['total_spend'] * mult / 15),
                     "projected_month_spend": int(proj_spend)
                 },
             "product": product,

@@ -4,55 +4,160 @@ import numpy as np
 
 st.markdown("""
 <style>
-    .main .block-container { 
-        padding-top: 2rem; 
-        max-width: 100% !important;
-        text-align: left;  /* Общий выравнивание — лево, кроме заголовка */
+    /* Шрифты: Montserrat как аналог Gilroy + Verdana fallback */
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Verdana:wght@400;700&display=swap');
+
+    /* Основные шрифты */
+    h1, h2, h3, .stButton > button {
+        font-family: 'Montserrat', Verdana, sans-serif !important;
+        font-weight: 600;
     }
-    h1 { 
-        text-align: center !important;  /* Только заголовок по центру */
-        color: #97B8FF !important;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    p, .stTextInput label, .stMarkdown, .stDataFrame {
+        font-family: 'Verdana', Montserrat, sans-serif !important;
+        font-weight: 400;
+    }
+    .stSuccess, .stWarning {
+        font-family: 'Montserrat', Verdana, sans-serif !important;
+        font-weight: 700;
+    }
+
+    /* Фон: белый, текст тёмный */
+    .stApp, .main .block-container, [data-testid="stAppViewContainer"] {
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+    }
+
+    /* Поле ввода: белый фон, тёмный текст/лейбл/плейсхолдер/курсор */
+    .stTextInput > div > div > input {
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+        border: 1px solid #D1D5DB !important;
+        border-radius: 5px;
+        caret-color: #000000 !important;  /* Курсор чёрный */
+        outline: none !important;  /* Убираем дефолтный outline */
+    }
+    .stTextInput > div > div > input:focus {
+        border-color: #FF6200 !important;  /* Оранжевый фокус */
+        outline: 2px solid #FF6200 !important;  /* Видимый обвод для курсора */
+        caret-color: #000000 !important;  /* Курсор чёрный на фокусе */
+    }
+    .stTextInput > div > div > input::placeholder {
+        color: #000000 !important;
+        opacity: 0.6 !important;
+    }
+    .stTextInput > label {
+        color: #374151 !important;
+    }
+
+    /* Скроллбар в поле: тёмный */
+    .stTextInput > div > div > input::-webkit-scrollbar {
+        width: 8px;
+    }
+    .stTextInput > div > div > input::-webkit-scrollbar-track {
+        background: #FFFFFF !important;
+    }
+    .stTextInput > div > div > input::-webkit-scrollbar-thumb {
+        background: #9CA3AF !important;
+        border-radius: 4px;
+    }
+    .stTextInput > div > div > input::-webkit-scrollbar-thumb:hover {
+        background: #6B7280 !important;
+    }
+
+    /* Кнопка: оранжевая */
+    .stButton > button {
+        background-color: #FF6200 !important;
+        color: #FFFFFF !important;
+        border-radius: 10px;
+        border: none !important;
+    }
+    .stButton > button:hover {
+        background-color: #E55A00 !important;
+    }
+
+    /* Заголовки: чёрный, центр */
+    h1 {
+        text-align: center !important;
+        color: #000000 !important;
+        text-shadow: none;
         white-space: normal !important;
-        word-wrap: break-word !important; 
+        word-wrap: break-word !important;
         line-height: 1.3;
         font-size: 2em;
         margin-bottom: 1rem;
     }
-    .logo-container { 
-        text-align: center; 
-        margin: 1rem auto; 
-        display: block; 
-        width: 100%; 
+
+    /* Таблица: белый фон, тёмный текст */
+    .stDataFrame {
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
     }
-    .st-emotion-cache-1rk4zq {
-        text-align: center !important; 
+    .stDataFrame thead tr th {
+        background-color: #F9FAFB !important;
+        color: #000000 !important;
+        border-bottom: 1px solid #D1D5DB !important;
     }
-    .stButton > button { 
-        background-color: #FF6200; 
-        color: white; 
-        border-radius: 10px; 
-        width: 100%; 
-        max-width: 300px; 
-        margin: 0 auto; 
-        display: block; 
+    .stDataFrame tbody tr td {
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+        border-color: #D1D5DB !important;
+    }
+
+    /* Уведомления: светлые, тёмный текст (усиленный фикс для warning) */
+    .stAlert, .stWarning {  /* Основной класс для warning */
+        background-color: #FFF3CD !important;  /* Жёлтый фон */
+        color: #000000 !important;  /* Чёрный текст */
+        border-left: 4px solid #FF6200 !important;
+        border-radius: 5px;
+    }
+    .stAlert > div, .stWarning > div, .stWarning .element-container {  /* Вложенные div */
+        color: #000000 !important;  /* Текст внутри чёрный */
+    }
+    .stInfo {
+        background-color: #D1ECF1 !important;
+        color: #000000 !important;
+        border-left: 4px solid #17A2B8 !important;
+        border-radius: 5px;
+    }
+    .stSuccess {
+        background-color: #D4EDDA !important;
+        color: #000000 !important;
+        border-left: 4px solid #28A745 !important;
+        border-radius: 5px;
+    }
+    .stError {
+        background-color: #F8D7DA !important;
+        color: #000000 !important;
+        border-left: 4px solid #DC3545 !important;
+        border-radius: 5px;
+    }
+    /* Общий текст в уведомлениях */
+    .stAlert > div > div, .stWarning > div > div {
+        color: #000000 !important;
+    }
+
+    /* Лого: центр */
+    .logo-container {
+        text-align: center;
+        margin: 1rem auto;
+        display: block;
+        width: 100%;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Mock: Загрузка профиля с заглушкой
+# Загрузка профиля
 @st.cache_data
-def load_user_profile(user_id):
-    # Просто маппинг user_id -> кластер
+def load_user_profile(user_id: str) -> dict:
     cluster_mapping = {
-        'user123': 'Универсальные продукты',
-        'user456': 'Для военнослужащих и ОПК',
-        'user789': 'Пенсионные программы',
-        'user999': 'Инвестиции и накопления',
-        'user007': 'Премиум-банкинг',
+        '123': 'Универсальные продукты',
+        '456': 'Для военнослужащих и ОПК',
+        '789': 'Пенсионные программы',
+        '999': 'Инвестиции и накопления',
+        '007': 'Премиум-банкинг',
     }
-
-    cluster = cluster_mapping.get(user_id, 'Универсальные продукты')  # fallback
+    cluster = cluster_mapping.get(user_id, 'Универсальные продукты')
 
     if user_id in cluster_mapping:
         st.info(f"Загружен профиль пользователя **{user_id}**, кластер: **{cluster}**")
@@ -61,10 +166,9 @@ def load_user_profile(user_id):
 
     return {'cluster': cluster}
 
-
-# Загрузка продуктов (полный список из 49 продуктов)
+# Загрузка продуктов
 @st.cache_data
-def load_products():
+def load_products() -> pd.DataFrame:
     data = [
         # Универсальные продукты
         (1, "Кредит на любые цели", "Универсальные продукты", "https://www.psbank.ru/personal/loans/specialpurpose"),
@@ -72,27 +176,21 @@ def load_products():
         (3, "Зарплатная карта «Твой Плюс»", "Универсальные продукты", "https://www.psbank.ru/personal/salary/plus"),
         (4, "Вклад «Моя копилка»", "Универсальные продукты", "https://www.psbank.ru/personal/saving/mymoneybox"),
         (5, "Вклад «Стабильный доход»", "Универсальные продукты", "https://www.psbank.ru/personal/saving/stabilnyi-dokhod"),
-        (6, "Накопительный счет «Акцент на процент»", "Универсальные продукты",
-         "https://www.psbank.ru/personal/savingsaccount/accentpercent"),
+        (6, "Накопительный счет «Акцент на процент»", "Универсальные продукты", "https://www.psbank.ru/personal/savingsaccount/accentpercent"),
         (7, "ПСБ Инвестиции", "Универсальные продукты", "https://www.psbank.ru/personal/wealth/app"),
         (8, "Робот-советник", "Универсальные продукты", "https://www.psbank.ru/personal/wealth/robot-adviser"),
         (9, "Брокерский счет", "Универсальные продукты", "https://www.psbank.ru/personal/wealth/brokerskiy-schet"),
         # Специальные предложения
         (10, "Вклад «Мои возможности»", "Специальные предложения", "https://www.psbank.ru/personal/saving/mypossiblities"),
-        (11, "Платежный стикер к карте «Твой кешбэк»", "Специальные предложения",
-         "https://www.psbank.ru/personal/cards/stiker"),
+        (11, "Платежный стикер к карте «Твой кешбэк»", "Специальные предложения", "https://www.psbank.ru/personal/cards/stiker"),
         (12, "Зарплатная карта «Зарплата PRO»", "Специальные предложения", "https://www.psbank.ru/personal/salary/salarypro"),
         (13, "Индивидуальная зарплатная карта", "Специальные предложения", "https://www.psbank.ru/personal/salary/izp"),
-        (14, "Накопительный счет «Про запас»", "Специальные предложения",
-         "https://www.psbank.ru/personal/savingsaccount/in_store"),
-        (15, "Накопительный счет «Хранитель»", "Специальные предложения",
-         "https://www.psbank.ru/personal/savingsaccount/hranitel"),
+        (14, "Накопительный счет «Про запас»", "Специальные предложения", "https://www.psbank.ru/personal/savingsaccount/in_store"),
+        (15, "Накопительный счет «Хранитель»", "Специальные предложения", "https://www.psbank.ru/personal/savingsaccount/hranitel"),
         # Региональные программы
-        (16, "Госпрограмма. Военная ипотека. Новые субъекты", "Региональные программы",
-         "https://www.psbank.ru/personal/mortgage/military-new-territories"),
+        (16, "Госпрограмма. Военная ипотека. Новые субъекты", "Региональные программы", "https://www.psbank.ru/personal/mortgage/military-new-territories"),
         (17, "Карта жителя - Питер", "Региональные программы", "https://www.psbank.ru/personal/debetcards/residentcard"),
-        (18, "Дальневосточная и арктическая ипотека", "Региональные программы",
-         "https://www.psbank.ru/personal/mortgage/east"),
+        (18, "Дальневосточная и арктическая ипотека", "Региональные программы", "https://www.psbank.ru/personal/mortgage/east"),
         (19, "Вклад «В юанях»", "Региональные программы", "https://www.psbank.ru/personal/saving/yuan"),
         # Для военнослужащих и ОПК
         (20, "Кредит для работников предприятий ОПК и военнослужащих", "Для военнослужащих и ОПК", "https://www.psbank.ru/personal/loans/creditaction"),
@@ -165,7 +263,7 @@ def generate_llm_response(profile, recs, user_id):
 
     if cluster == 'Универсальные продукты':
         return f"""
-        **Привет, {user_id}!** Мы проанализировали твой профиль и подобрали идеальные базовые продукты из кластера 'Универсальные продукты'. 
+        **Здравствуйте, {user_id}!** Мы проанализировали твой профиль и подобрали идеальные базовые продукты из кластера 'Универсальные продукты'. 
 
         Вот топ-3 по актуальности:
 
@@ -190,11 +288,11 @@ with col2:
 st.title("Рекомендательная система банковских продуктов")
 
 
-user_id = st.text_input("Введите User ID:", placeholder="Например: user123")
+user_id = st.text_input("Введите User ID. Например: 123")
 
 if st.button("Получить рекомендации"):
     if not user_id:
-        st.warning("Введи user_id!")
+        st.warning("Введите user_id!")
     else:
         profile = load_user_profile(user_id)
         recs = recommend_products(profile)

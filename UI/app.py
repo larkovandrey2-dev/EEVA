@@ -11,7 +11,7 @@ st.markdown("""
     }
     h1 { 
         text-align: center !important;  /* Только заголовок по центру */
-        color: #1E3A8A !important;
+        color: #97B8FF !important;
         text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
         white-space: normal !important;
         word-wrap: break-word !important; 
@@ -190,7 +190,7 @@ with col2:
 st.title("Рекомендательная система банковских продуктов")
 
 
-user_id = st.text_input("User ID:", placeholder="Например: user123")
+user_id = st.text_input("Введите User ID:", placeholder="Например: user123")
 
 if st.button("Получить рекомендации"):
     if not user_id:

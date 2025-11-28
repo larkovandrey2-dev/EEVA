@@ -51,7 +51,7 @@ print(f"\nГотово! Данные с кластерами: {CLUSTERED_DATA}")
 def get_segment_name(row):
     cid = row['cluster_id']
     if cid == 6:
-        return "💎 VIP (Тусовщики)"
+        return "💎 VIP "
     elif cid in [1, 3]:
         return "💼 Средний класс"
     else:

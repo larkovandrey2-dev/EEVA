@@ -5,17 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="818e91d5-7c85-43a0-8815-af6e0f7e762d" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/clean_data/brand_category_map.csv" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/clean_data/marketplace_sample.csv" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/clean_data/master_features_active.csv" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/clean_data/payments_final_real.csv" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/clean_data/payments_ready_for_ai.csv" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/clean_data/payments_sample.csv" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/05_clustering.py" beforeDir="false" afterPath="$PROJECT_DIR$/05_clustering.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/better-clustoring.py" beforeDir="false" afterPath="$PROJECT_DIR$/better-clustoring.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/clean_data/kmeans_model.pkl" beforeDir="false" afterPath="$PROJECT_DIR$/clean_data/kmeans_model.pkl" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/clean_data/users_clustered.csv" beforeDir="false" afterPath="$PROJECT_DIR$/clean_data/users_clustered.csv" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -68,7 +58,7 @@
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;Rebasing main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;last_opened_file_path&quot;: &quot;/Users/andrew/Documents/GitHub/EEVA/raw_data&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
   }

@@ -1,9 +1,9 @@
 from engine import RecommendationEngine
 
-USERS_PATH = "clean_data/users_clustered.parquet"
-TRANS_PATH = "clean_data/payments_ready_markov.parquet"
+USERS_PATH = "clean_data/users_fast.parquet"
+TRANS_PATH = "clean_data/trans_fast.parquet"
 engine = RecommendationEngine(USERS_PATH,TRANS_PATH)
-first_user_id = 16466
+first_user_id = 1923871
 rec = engine.recommend(first_user_id)
 if rec:
     print(rec)

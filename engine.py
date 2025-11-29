@@ -1,6 +1,9 @@
+# engine.py
 import pandas as pd
 import json
 import random
+import os
+import streamlit as st
 from twin_matcher import TwinMatcher
 from yagpt_client import YandexGPT
 from psb_catalog import CATALOG, PREDICTION_TAGS, TREND_MAPPING
@@ -8,26 +11,60 @@ from psb_catalog import CATALOG, PREDICTION_TAGS, TREND_MAPPING
 
 class RecommendationEngine:
     def __init__(self, users_file, trans_file):
-        print("Loading EEVA Engine v3.1 (Fixed)")
-        # Грузим данные
-        self.users = pd.read_csv(users_file).set_index('user_id')
-        self.trans = pd.read_csv(trans_file, usecols=['user_id', 'category_final', 'brand_id'])
+        print("Loading EEVA Engine v4.0 (Turbo)...")
 
-        # Модули
-        self.matcher = TwinMatcher("clean_data/twin_index.pkl")
+        # 1. ЗАГРУЗКА ДАННЫХ (С КЭШИРОВАНИЕМ STREAMLIT)
+        self.users, self.trans = self._load_data(users_file, trans_file)
+
+        # 2. ЗАГРУЗКА МОДУЛЕЙ
+        self.matcher = self._load_matcher("clean_data/twin_index.pkl")
         self.llm = YandexGPT()
 
-        # Марков
-        try:
-            with open("markov_chains.json", "r", encoding='utf-8') as f:
-                self.markov = json.load(f)
-            print("✅ Markov Model: CONNECTED")
-        except:
-            self.markov = {}
-            print("⚠️ Markov Model: OFFLINE")
+        # 3. МАРКОВ
+        self.markov = self._load_markov("markov_chains.json")
 
+    # === КЭШИРОВАННЫЕ МЕТОДЫ ЗАГРУЗКИ ===
+    # Декоратор st.cache_resource сохраняет результат функции в памяти сервера.
+    # Если параметры (пути к файлам) не меняются, функция не выполняется повторно!
+
+    @staticmethod
+    @st.cache_resource(show_spinner=False)
+    def _load_data(users_path, trans_path):
+        print("   -> Reading Parquet Data...")
+
+        # Читаем USERS
+        if users_path.endswith('.parquet'):
+            users = pd.read_parquet(users_path)
+        else:
+            users = pd.read_csv(users_path)
+
+        if 'user_id' in users.columns:
+            users = users.set_index('user_id')
+
+        # Читаем TRANS
+        if trans_path.endswith('.parquet'):
+            trans = pd.read_parquet(trans_path)
+        else:
+            trans = pd.read_csv(trans_path, usecols=['user_id', 'category_final', 'brand_id'])
+
+        return users, trans
+
+    @staticmethod
+    @st.cache_resource(show_spinner=False)
+    def _load_matcher(path):
+        return TwinMatcher(path)
+
+    @staticmethod
+    @st.cache_resource(show_spinner=False)
+    def _load_markov(path):
+        try:
+            with open(path, "r", encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {}
+
+    # === ЛОГИКА (ОСТАЕТСЯ ПРЕЖНЕЙ) ===
     def _get_segment_info(self, cluster_id):
-        # Возвращает 3 значения: TAG, Name, Multiplier
         if cluster_id == 2: return "VIP", "💎 Premium / VIP", 3.0
         if cluster_id == 6: return "DEFENSE", "🛡 ОПК / Силовые структуры", 1.2
         if cluster_id in [0, 5]: return "YOUTH", "🌙 Student / Young", 0.8
@@ -36,23 +73,17 @@ class RecommendationEngine:
         return "MASS", "🛒 Mass Market", 1.0
 
     def _predict_next(self, user_id):
-        """
-        Возвращает ровно 3 значения:
-        1. Тренд (строка или None)
-        2. Вероятность (float)
-        3. Последняя категория (строка или None)
-        """
+        # Оптимизация: фильтрация по индексу быстрее, если транс будет индексирован,
+        # но пока оставим как есть, так как Parquet уже быстрый
         user_tx = self.trans[self.trans['user_id'] == user_id]
 
         if user_tx.empty:
             return None, 0, None
 
         last_action_raw = user_tx.iloc[-1]['category_final']
-
         pred_data = self.markov.get(last_action_raw)
 
         if pred_data:
-            # Маппим сырое предсказание на наш каталог
             raw_pred = pred_data['prediction']
             trend = TREND_MAPPING.get(raw_pred, raw_pred)
             return trend, pred_data['probability'], last_action_raw
@@ -61,27 +92,21 @@ class RecommendationEngine:
 
     def _find_best_product(self, segment, tags, exclude_name=None):
         candidates = []
-
         for category, items in CATALOG.items():
             for item in items:
                 if exclude_name and item['name'] == exclude_name:
                     continue
-
-                # Проверка сегмента или ALL
                 if segment in item['segment'] or "ALL" in item['segment'] or "MASS" in item['segment']:
-
                     matches = sum(1 for t in item['tags'] if t in tags)
-
                     if matches > 0:
-                        candidates.append((item, matches * 2))  # Приоритет тегам
+                        candidates.append((item, matches * 2))
                     else:
-                        candidates.append((item, 1))  # Просто сегмент
+                        candidates.append((item, 1))
 
         if not candidates:
             return None
 
         candidates.sort(key=lambda x: x[1], reverse=True)
-        # Берем рандом из топ-3 для вариативности
         top_n = candidates[:3]
         return random.choice(top_n)[0]
 
@@ -89,24 +114,21 @@ class RecommendationEngine:
         target_id = user_id
         is_twin = False
         match_type = "Real Data"
+        last_cat = None
 
-        # 1. Twin Logic
+        # Проверка наличия в индексе
         if user_id not in self.users.index:
             is_twin = True
+            # TwinMatcher уже загружен и закэширован
             target_id, match_type = self.matcher.find_twin(user_id, self.users.index)
 
         try:
-            # 2. Получаем профиль
             user_row = self.users.loc[target_id]
             cluster_id = int(user_row['cluster_id'])
 
-            # Распаковка 3 значений
             seg_tag, seg_name, mult = self._get_segment_info(cluster_id)
-
-            # Распаковка 3 значений
             pred_trend, prob, last_cat = self._predict_next(target_id)
 
-            # 3. Выбор Primary продукта
             user_spend = user_row['total_spend']
             if user_spend > 80000:
                 needed_tags = ['luxury', 'travel', 'saving']
@@ -114,47 +136,38 @@ class RecommendationEngine:
                 needed_tags = ['shopping', 'cash', 'salary']
 
             primary_prod = self._find_best_product(seg_tag, needed_tags)
-
-            # Fallback
             if not primary_prod:
                 primary_prod = CATALOG['debit'][0]
 
-            # 4. Выбор Secondary (Context) продукта
             secondary_prod = None
             reason = "Специальное предложение"
             source = "Ecosystem"
             context_tags = []
 
-            # Логика Маркова
             if pred_trend and pred_trend in PREDICTION_TAGS:
                 context_tags = PREDICTION_TAGS[pred_trend]
                 reason = f"Актуально после категории '{last_cat}'"
                 source = "🔮 Instant Need"
-
-            # Логика Времени
             elif time_of_day == "Night":
                 context_tags = ['entertainment', 'transfer', 'online']
                 reason = "Для ночных покупок и развлечений"
                 source = "🌙 Night Context"
-
-            # Логика Лайфстайла (если нет Маркова)
             else:
                 context_tags = ['saving', 'debt']
                 reason = "Персонально для вас"
                 source = "🧠 Smart Fit"
 
-            # Ищем продукт, исключая Primary
             secondary_prod = self._find_best_product(seg_tag, context_tags, exclude_name=primary_prod['name'])
 
-            # Fallback Secondary
             if not secondary_prod:
                 secondary_prod = self._find_best_product(seg_tag, [], exclude_name=primary_prod['name'])
-                if not secondary_prod:  # Если совсем всё плохо
-                    secondary_prod = CATALOG['service'][2]  # СБП Плюс
+                if not secondary_prod:
+                    secondary_prod = CATALOG['service'][2]
                 source = "🏆 Best Seller"
 
-            # 5. Генерация текста (LLM)
-            # Чтобы не падало, добавим try/except на сам вызов LLM
+            # LLM вызов - асинхронность здесь не поможет, так как requests синхронный,
+            # но это блокирующая операция. Для демо можно оставить как есть или сделать заглушку,
+            # если LLM тормозит.
             try:
                 llm_text = self.llm.generate_offer(
                     segment=seg_name,
@@ -170,6 +183,7 @@ class RecommendationEngine:
                 "is_twin": is_twin,
                 "match_type": match_type,
                 "segment_name": seg_name,
+                "last_cat": last_cat,
                 "stats": {"projected_spend": int(user_row['total_spend'] * mult)},
                 "primary": {"product": primary_prod, "desc": "Базовый продукт"},
                 "secondary": {
@@ -182,6 +196,5 @@ class RecommendationEngine:
             }
 
         except Exception as e:
-            # Для отладки выведем полный трейс
             print(f"❌ Error logic for {user_id}: {e}")
             return None

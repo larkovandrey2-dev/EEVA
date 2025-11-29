@@ -1,218 +1,249 @@
 import streamlit as st
 from engine import RecommendationEngine
-from products import TREND_MAPPING, CONTEXT_OFFERS
+
+USERS_PATH = "clean_data/users_fast.parquet"
+TRANS_PATH = "clean_data/trans_fast.parquet"
+
+# --- Настройка страницы ---
+st.set_page_config(page_title="PSB Smart Offers", layout="centered")
 
 
-engine = RecommendationEngine("clean_data/users_clustered.csv")
+@st.cache_resource(show_spinner="Загрузка AI ядра...")
+def get_engine():
+    return RecommendationEngine(USERS_PATH, TRANS_PATH)
+
+
+try:
+    engine = get_engine()
+    data_loaded = True
+except Exception as e:
+    st.error(f"Engine Load Error: {e}")
+    data_loaded = False
 
 
 st.markdown("""
 <style>
-    /* Шрифты: Montserrat как аналог Gilroy + Verdana fallback */
+    /* === 1. ИСПРАВЛЕНИЕ ИНПУТА (ЧЕРНЫЙ ТЕКСТ И КУРСОР) === */
+    .stTextInput > div > div > input {
+        color: #000000 !important;          /* Черный текст */
+        caret-color: #000000 !important;    /* Черный курсор */
+        background-color: #FFFFFF !important;
+        border: 1px solid #4B5563 !important;
+        font-weight: 500 !important;
+        -webkit-text-fill-color: #000000 !important; /* Фикс для Safari/Chrome */
+    }
+    .stTextInput > div > div > input::placeholder {
+        color: #6B7280 !important; /* Серый плейсхолдер */
+        opacity: 1 !important;
+    }
+
+    /* === 2. DEBUG ПАНЕЛЬ (ЧЕТКОСТЬ) === */
+    .streamlit-expanderHeader {
+        background-color: #F0F7FF !important;
+        color: #2B2C84 !important;
+        border: 1px solid #D1D5DB;
+        border-radius: 8px;
+    }
+    .streamlit-expanderHeader p { 
+        color: #2B2C84 !important; 
+        font-weight: 700 !important; 
+        font-size: 1rem !important; 
+    }
+    .streamlit-expanderContent {
+        background-color: #FFFFFF !important;
+        border: 1px solid #D1D5DB;
+        border-top: none;
+        color: #000000 !important;
+    }
+
+    /* === 3. МЕТРИКИ (ПОПРАВИЛ ШРИФТ) === */
+    [data-testid="stMetricValue"] {
+        font-size: 1.1rem !important;
+        color: #2B2C84 !important;
+        font-weight: 700 !important;
+        /* Убрал Montserrat, чтобы цифры не плыли */
+        font-family: sans-serif !important; 
+    }
+    [data-testid="stMetricLabel"] { 
+        color: #374151 !important;
+        font-size: 0.8rem !important; 
+        font-weight: 600;
+    }
+
+    /* === ОСТАЛЬНОЕ === */
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Verdana:wght@400;700&display=swap');
 
-    /* Основные шрифты */
-    h1, h2, h3, .stButton > button {
-        font-family: 'Montserrat', Verdana, sans-serif !important;
-        font-weight: 600;
-    }
-    p, .stTextInput label, .stMarkdown, .stDataFrame {
-        font-family: 'Verdana', Montserrat, sans-serif !important;
-        font-weight: 400;
-    }
-    .stSuccess, .stWarning {
-        font-family: 'Montserrat', Verdana, sans-serif !important;
-        font-weight: 700;
-    }
+    h1, h2, h3, .stButton > button { font-family: 'Montserrat', sans-serif !important; font-weight: 600; }
+    p, div, label { font-family: 'Verdana', sans-serif !important; }
 
-    /* Фон: белый, текст тёмный */
-    .stApp, .main .block-container, [data-testid="stAppViewContainer"] {
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-    }
+    .stApp, .main .block-container { background-color: #FFFFFF !important; color: #000000 !important; }
+    header[data-testid="stHeader"] { display: none !important; }
+    .main .block-container { padding-top: 2rem !important; }
 
-    /* Поле ввода: белый фон, тёмный текст/лейбл/плейсхолдер/курсор */
-    .stTextInput > div > div > input {
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-        border: 1px solid #D1D5DB !important;
-        border-radius: 5px;
-        caret-color: #000000 !important;  /* Курсор чёрный */
-        outline: none !important;  /* Убираем дефолтный outline */
-    }
-    .stTextInput > div > div > input:focus {
-        border-color: #FF6200 !important;  /* Оранжевый фокус */
-        outline: 2px solid #FF6200 !important;  /* Видимый обвод для курсора */
-        caret-color: #000000 !important;  /* Курсор чёрный на фокусе */
-    }
-    .stTextInput > div > div > input::placeholder {
-        color: #000000 !important;
-        opacity: 0.6 !important;
-    }
-    .stTextInput > label {
-        color: #374151 !important;
-    }
+    .stTextInput > label { color: #2B2C84 !important; font-weight: 700 !important; }
 
-    /* Скроллбар в поле: тёмный */
-    .stTextInput > div > div > input::-webkit-scrollbar {
-        width: 8px;
-    }
-    .stTextInput > div > div > input::-webkit-scrollbar-track {
-        background: #FFFFFF !important;
-    }
-    .stTextInput > div > div > input::-webkit-scrollbar-thumb {
-        background: #9CA3AF !important;
-        border-radius: 4px;
-    }
-    .stTextInput > div > div > input::-webkit-scrollbar-thumb:hover {
-        background: #6B7280 !important;
-    }
-
-    /* Кнопка: оранжевая */
     .stButton > button {
-        background-color: #FF6200 !important;
-        color: #FFFFFF !important;
-        border-radius: 10px;
-        border: none !important;
+        background-color: #EA5614 !important;
+        color: white !important;
+        border-radius: 8px;
+        border: none;
+        font-weight: 600;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-    .stButton > button:hover {
-        background-color: #E55A00 !important;
-    }
-
-    /* Заголовки: чёрный, центр */
-    h1 {
-        text-align: center !important;
-        color: #000000 !important;
-        text-shadow: none;
-        white-space: normal !important;
-        word-wrap: break-word !important;
-        line-height: 1.3;
-        font-size: 2em;
-        margin-bottom: 1rem;
-    }
-
-    /* Таблица: белый фон, тёмный текст */
-    .stDataFrame {
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-    }
-    .stDataFrame thead tr th {
-        background-color: #F9FAFB !important;
-        color: #000000 !important;
-        border-bottom: 1px solid #D1D5DB !important;
-    }
-    .stDataFrame tbody tr td {
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-        border-color: #D1D5DB !important;
-    }
-
-    /* Уведомления: светлые, тёмный текст (усиленный фикс для warning) */
-    .stAlert, .stWarning {  /* Основной класс для warning */
-        background-color: #FFF3CD !important;  /* Жёлтый фон */
-        color: #000000 !important;  /* Чёрный текст */
-        border-left: 4px solid #FF6200 !important;
-        border-radius: 5px;
-    }
-    .stAlert > div, .stWarning > div, .stWarning .element-container {  /* Вложенные div */
-        color: #000000 !important;  /* Текст внутри чёрный */
-    }
-    .stInfo {
-        background-color: #D1ECF1 !important;
-        color: #000000 !important;
-        border-left: 4px solid #17A2B8 !important;
-        border-radius: 5px;
-    }
-    .stSuccess {
-        background-color: #D4EDDA !important;
-        color: #000000 !important;
-        border-left: 4px solid #28A745 !important;
-        border-radius: 5px;
-    }
-    .stError {
-        background-color: #F8D7DA !important;
-        color: #000000 !important;
-        border-left: 4px solid #DC3545 !important;
-        border-radius: 5px;
-    }
-    /* Общий текст в уведомлениях */
-    .stAlert > div > div, .stWarning > div > div {
-        color: #000000 !important;
-    }
-
-    /* Лого: центр */
-    .logo-container {
-        text-align: center;
-        margin: 1rem auto;
-        display: block;
-        width: 100%;
-    }
+    .stButton > button:hover { background-color: #C1440E !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# UI
-col1, col2, col3 = st.columns([1, 2, 1]) # Центрированный логотип
+
+
+col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    st.image("PSB_logo.png", width=540,)
+    try:
+        st.image("PSB_logo.png", use_container_width=True)
+    except:
+        st.markdown("<h1 style='text-align: center; color: #2B2C84'>PSB BANK</h1>", unsafe_allow_html=True)
 
-st.title("Рекомендательная система банковских продуктов")
+st.markdown("<h3 style='text-align: center; color: #374151;'>Рекомендательная система</h3>", unsafe_allow_html=True)
 
-
-user_id = st.text_input("Введите User ID. Например: 123")
+# Поиск
+user_input = st.text_input("Введите User ID", placeholder="Например: 16466")
 
 if st.button("Получить рекомендации"):
-    if not user_id:
+    if not user_input:
         st.warning("Введите user_id!")
     else:
         try:
-            user_id_int = int(user_id.strip())  # Преобразование в int, убираем пробелы
+            user_id = int(user_input.strip())
+            rec = engine.recommend(user_id)
         except ValueError:
-            st.error("User ID должен быть числом (напр. 1228, без кавычек).")
-            st.stop()  # Остановка, если не число
+            st.error("User ID должен быть числом.")
+            st.stop()
 
-        recommendation = engine.recommend(user_id_int)  # Передаём int в recommend
-        if recommendation:
-            st.success(f"Рекомендации для {user_id}:")
-            st.write(f"**Сегмент:** {recommendation['segment_name']}")
-            st.write(f"**Кластер ID:** {recommendation['cluster_id']}")
-            st.write(f"**Статистика:** Реальные траты за 48ч: {recommendation['stats']['real_48h_spend']} руб. | Прогноз на месяц: {recommendation['stats']['projected_month_spend']} руб.")
-            st.write(f"**Причина:** {recommendation['reason']}")
+        if rec:
+            # --- 1. СТАТУС КЛИЕНТА ---
+            is_twin = rec.get('is_twin', False)
+            match_type = rec.get('match_type', 'Real Data')
+            segment = rec.get('segment_name', 'Unknown')
 
-            # Продукты из PSB_PRODUCTS (через engine)
-            product = recommendation['product']
-            st.subheader("Рекомендованные продукты:")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.write("**День:**")
-                st.write(f"**{product['default']['name']}**")
-                st.write(product['default']['desc'])
-            with col2:
-                st.write("**Ночь:**")
-                st.write(f"**{product['night']['name']}**")
-                st.write(product['night']['desc'])
-            with col3:
-                st.write("**Инвестиции:**")
-                st.write(f"**{product['invest']['name']}**")
-                st.write(product['invest']['desc'])
+            if is_twin:
+                st.info(f"**Новый клиент** (Cold Start). Профиль: **{match_type}**. Сегмент: **{segment}**")
+            else:
+                st.success(f"Клиент найден в базе. Сегмент: **{segment}**")
 
-            # LLM-промпт из engine
-            # llm_prompt = engine.get_llm_prompt(recommendation)
-            # st.subheader("LLM-промпт для генерации ответа:")
-            # st.text_area("", llm_prompt, height=150, disabled=True)
+            # --- 2. КАРТОЧКИ ---
+            col_p, col_s = st.columns(2)
 
-            # Спецпредложение из CONTEXT_OFFERS по cluster_id
-            cluster_key = recommendation['cluster_id']
-            # Маппинг cluster_id к тренду (обратный TREND_MAPPING)
-            reverse_trend = {v: k for k, v in TREND_MAPPING.items()}
-            trend = reverse_trend.get(cluster_key)
-            if trend:
-                offer = CONTEXT_OFFERS.get(TREND_MAPPING[trend], {})
-                if offer:
-                    st.subheader("Спецпредложение по тренду:")
-                    st.write(f"**Тренд:** {trend}")
-                    st.write(f"**{offer['name']}** - {offer['desc']}")
+            # Primary (Стратегия)
+            with col_p:
+                p_data = rec.get('primary', {})
+                prod = p_data.get('product', {})
+
+                if prod:
+                    html_p = f"""
+                    <div style="background-color: #FFFFFF; padding: 20px; border-radius: 12px; border: 1px solid #D1D5DB; border-top: 6px solid #EA5614; height: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                        <div style="color: #EA5614; font-weight: 800; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
+                            🔥 Стратегическое
+                        </div>
+                        <div style="font-family: 'Montserrat', sans-serif; font-size: 1.3em; font-weight: 700; color: #111827; margin-bottom: 10px; line-height: 1.2;">
+                            {prod.get('name', 'Продукт')}
+                        </div>
+                        <div style="font-size: 0.95em; color: #374151; margin-bottom: 20px; line-height: 1.5; font-weight: 400;">
+                            {prod.get('desc', '')}
+                        </div>
+                        <div style="font-size: 0.9em; color: #000000; background: #FFF5F0; padding: 12px; border-radius: 6px; border-left: 4px solid #EA5614;">
+                            <b style="color: #EA5614;">Обоснование:</b><br>{p_data.get('desc', 'Базовый продукт для сегмента')}
+                        </div>
+                    </div>
+                    """
+                    st.markdown(html_p, unsafe_allow_html=True)
+                else:
+                    st.info("Нет предложений")
+
+            # Secondary (Тактика/AI)
+            with col_s:
+                s_data = rec.get('secondary', {})
+                prod_s = s_data.get('product', {})
+
+                if prod_s:
+                    marketing_msg = s_data.get('marketing_msg', s_data.get('reason', ''))
+                    source_type = s_data.get('type', 'Recommendation').upper()
+
+                    html_s = f"""
+                    <div style="background-color: #FFFFFF; padding: 20px; border-radius: 12px; border: 1px solid #D1D5DB; border-top: 6px solid #2B2C84; height: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                        <div style="color: #2B2C84; font-weight: 800; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
+                             {source_type}
+                        </div>
+                        <div style="font-family: 'Montserrat', sans-serif; font-size: 1.3em; font-weight: 700; color: #111827; margin-bottom: 10px; line-height: 1.2;">
+                            {prod_s.get('name', 'Продукт')}
+                        </div>
+                        <div style="font-size: 0.95em; color: #374151; margin-bottom: 20px; line-height: 1.5; font-weight: 400;">
+                            {prod_s.get('desc', '')}
+                        </div>
+                        <div style="font-size: 0.9em; color: #000000; background: #F0F7FF; padding: 12px; border-radius: 6px; border-left: 4px solid #2B2C84;">
+                            <b style="color: #2B2C84;">AI Инсайт:</b><br>{marketing_msg}
+                        </div>
+                    </div>
+                    """
+                    st.markdown(html_s, unsafe_allow_html=True)
+                else:
+                    st.markdown("""
+                    <div style="background-color: #FFFFFF; padding: 20px; border-radius: 10px; border: 1px solid #E5E7EB; height: 100%; display: flex; align-items: center; justify-content: center; color: #646872;">
+                        <i>Дополнительных рекомендаций нет</i>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            # --- 3. DEBUG BLOCK ---
+            st.write("")
+            with st.expander("🛠 Как это работает? (Debug & Logic Trace)"):
+
+                debug_info = rec.get('debug', {})
+                stats = rec.get('stats', {})
+
+                # Метрики
+                d1, d2, d3, d4 = st.columns(4)
+                d1.metric("Segment", debug_info.get('segment', 'N/A'))
+                d2.metric("Source", "Twin" if rec.get('is_twin') else "Real")
+                d3.metric("Match", rec.get('match_type', '-').split()[
+                    -1])  # Берем только последнее слово (Unknown / Profile), чтобы влезло
+                d4.metric("Spend", f"{stats.get('projected_spend', 0)} ₽")
+
+                st.divider()
+                st.markdown("<h5 style='color: #2B2C84; margin-bottom: 10px;'>🧠 AI Logic Trace</h5>",
+                            unsafe_allow_html=True)
+
+                # Логика Маркова (Визуализация)
+                trend = debug_info.get('trend')
+                last_cat = rec["last_cat"] if rec["last_cat"] is not None else "Unknown"
+
+                if trend:
+                    st.markdown(f"""
+                    <div style="background-color: #F0F9EB; padding: 12px; border-radius: 6px; border-left: 5px solid #4E621C; margin-bottom: 10px;">
+                        <b style="color: #000; font-size: 0.9rem;">Markov Prediction:</b><br>
+                        <span style="color: #374151; font-size: 0.9rem;">
+                        Последняя транзакция → <span style="color: #15803d; font-weight: 700;">Сработал паттерн</span> → 
+                        Тренд: <span style="background-color: #dcfce7; padding: 2px 6px; border-radius: 4px; color: #166534; font-weight: 700;">{trend}</span>
+                        </span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div style="background-color: #FEF2F2; padding: 12px; border-radius: 6px; border-left: 5px solid #EF4444; margin-bottom: 10px;">
+                        <b style="color: #000; font-size: 0.9rem;">Markov Prediction:</b><br>
+                        <span style="color: #374151; font-size: 0.9rem;">Нет явного паттерна поведения.</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # Теги
+                sec_prod = rec.get('secondary', {}).get('product', {})
+                if sec_prod:
+                    tags = sec_prod.get('tags', [])
+                    # Красивые теги
+                    tags_html = "".join([
+                                            f"<span style='background:#E5E7EB; padding:2px 8px; border-radius:12px; margin-right:5px; font-size:0.8rem; color:#374151;'>#{t}</span>"
+                                            for t in tags])
+                    st.markdown(f"<div style='margin-top:5px;'><b>Matched Tags:</b> {tags_html}</div>",
+                                unsafe_allow_html=True)
 
         else:
-            st.error("Пользователь не найден в CSV. Проверь user_id в users_clustered.csv.")
-
+            st.error("Ошибка: Engine вернул пустой ответ.")

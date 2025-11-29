@@ -1,6 +1,5 @@
 import streamlit as st
 from engine import RecommendationEngine
-from first_run import USERS_PATH, TRANS_PATH
 
 # --- Настройка страницы ---
 st.set_page_config(page_title="PSB Smart Offers", layout="centered")
@@ -9,6 +8,8 @@ st.set_page_config(page_title="PSB Smart Offers", layout="centered")
 # --- Инициализация ---
 @st.cache_resource
 def get_engine():
+    USERS_PATH = "clean_data/users_fast.parquet"
+    TRANS_PATH = "clean_data/trans_fast.parquet"
     return RecommendationEngine(USERS_PATH, TRANS_PATH)
 
 

@@ -1,6 +1,7 @@
 import pandas as pd
 import json
 import os
+import random
 from twin_matcher import TwinMatcher
 from yagpt_client import YandexGPT
 from psb_catalog import CATALOG, PREDICTION_TAGS, TREND_MAPPING
@@ -8,9 +9,9 @@ from psb_catalog import CATALOG, PREDICTION_TAGS, TREND_MAPPING
 
 class RecommendationEngine:
     def __init__(self, users_file, trans_file):
-        print("Loading EEVA Engine v5.0")
+        print("Loading EEVA Engine v5.2 (Twin Fix)...")
 
-        # 1. Загрузка данных (Универсальная)
+        # 1. Загрузка данных
         if users_file.endswith('.parquet'):
             self.users = pd.read_parquet(users_file)
         else:
@@ -47,13 +48,12 @@ class RecommendationEngine:
             "YOUTH": ["VIP", "DEFENSE", "SAVER"],
             "SAVER": ["YOUTH", "VIP", "DEFENSE"],
             "VIP": ["YOUTH", "SAVER"],
-            "DEFENSE": ["YOUTH"],  # Военный может быть пенсионером, но не студентом
+            "DEFENSE": ["YOUTH"],
             "MASS": ["VIP", "DEFENSE"],
             "CREDIT_RISK": ["VIP", "invest"]
         }
 
     def _get_segment_info(self, cluster_id):
-        # Безопасный маппинг
         if cluster_id == 2: return "VIP", "💎 Premium / VIP", 3.0
         if cluster_id == 6: return "DEFENSE", "🛡 ОПК / Силовые структуры", 1.2
         if cluster_id in [0, 5]: return "YOUTH", "🌙 Student / Young", 0.8
@@ -62,11 +62,9 @@ class RecommendationEngine:
         return "MASS", "🛒 Mass Market", 1.0
 
     def _predict_next(self, user_id):
-        # Безопасное получение транзакций
         try:
             user_tx = self.trans[self.trans['user_id'] == user_id]
         except:
-            # Если user_id разного типа (int vs str)
             user_tx = self.trans[self.trans['user_id'] == str(user_id)]
 
         if user_tx.empty: return None, 0, None
@@ -82,9 +80,6 @@ class RecommendationEngine:
         return None, 0, last_action_raw
 
     def _calculate_score(self, item, user_segment, user_tags):
-        """
-        Строгая математика: Возвращает очки. -1 = Бан.
-        """
         score = 0
         prod_segments = item.get('segment', [])
         prod_tags = item.get('tags', [])
@@ -104,7 +99,7 @@ class RecommendationEngine:
         elif "MASS" in prod_segments or "ALL" in prod_segments:
             score += 20
         else:
-            return -1  # Чужой сегмент
+            return -1
 
         # 3. TAG SCORING
         matches = sum(1 for t in prod_tags if t in user_tags)
@@ -112,7 +107,7 @@ class RecommendationEngine:
 
         # 4. PENALTIES
         if "Кредит" in prod_name and "credit" not in user_tags and "debt" not in user_tags:
-            score -= 10  # Не предлагаем кредит без нужды
+            score -= 10
 
         return score
 
@@ -129,53 +124,36 @@ class RecommendationEngine:
                 if score > 0:
                     ranked_items.append((item, score))
 
-        # Сортировка: Очки (убыв), Имя (возр)
         ranked_items.sort(key=lambda x: (-x[1], x[0]['name']))
         return [r[0] for r in ranked_items]
 
     def recommend(self, user_id, time_of_day="Day"):
+        # TWIN ENGINE
         target_id = user_id
         is_twin = False
         match_type = "Real Data"
 
-        # 1. Поиск Юзера / Двойника
+        # Если юзера нет в базе - ищем двойника
         if user_id not in self.users.index:
             is_twin = True
-            # DEMO HACK: Если ID кончается на 7 -> Военный
-            if str(user_id).endswith("7"):
-                # Имитируем военного
-                target_id, match_type = self.matcher.find_twin(user_id, self.users.index)
-                seg_name = "🛡 ОПК / Силовые структуры"
-                seg_tag = "DEFENSE"
-                mult = 1.2
-                # Подменяем кластер, чтобы логика работала
-                cluster_id = 6
-            else:
-                target_id, match_type = self.matcher.find_twin(user_id, self.users.index)
-                # Получаем реальные данные двойника
-                try:
-                    user_row = self.users.loc[target_id]
-                    cluster_id = int(float(user_row['cluster_id']))
-                except:
-                    cluster_id = 3  # Fallback Mass
+            target_id, match_type = self.matcher.find_twin(user_id, self.users.index)
 
-                seg_tag, seg_name, mult = self._get_segment_info(cluster_id)
-        else:
-            # Реальный юзер
-            user_row = self.users.loc[target_id]
-            cluster_id = int(float(user_row['cluster_id']))
-            seg_tag, seg_name, mult = self._get_segment_info(cluster_id)
-
+        # Получаем данные профиля
         try:
-            # Данные для алгоритма
             if target_id in self.users.index:
-                user_spend = float(self.users.loc[target_id]['total_spend'])
+                user_row = self.users.loc[target_id]
+                cluster_id = int(float(user_row['cluster_id']))
+                user_spend = float(user_row['total_spend'])
             else:
+                cluster_id = 3  # Mass
                 user_spend = 50000.0
 
+            # Определяем сегмент и мультипликатор
+            seg_tag, seg_name, mult = self._get_segment_info(cluster_id)
+
+            # Предсказания Маркова
             pred_trend, prob, last_cat = self._predict_next(target_id)
 
-            # === 1. ГЕНЕРАЦИЯ ТЕГОВ ПОТРЕБНОСТЕЙ ===
             needed_tags = []
             if user_spend > 100000:
                 needed_tags.extend(['luxury', 'travel', 'invest'])
@@ -188,27 +166,21 @@ class RecommendationEngine:
             if seg_tag == "YOUTH": needed_tags.extend(['entertainment', 'tech'])
             if seg_tag == "CREDIT_RISK": needed_tags = ['debt', 'cash', 'optimization']
 
-            # 2. PRIMARY (СТРАТЕГИЯ)
             all_candidates = self._get_ranked_products(seg_tag, needed_tags)
 
-            #FIX ДЛЯ UI: ВОЗВРАЩАЕМ СЛОВАРЬ, А НЕ СПИСОК ---
+            primary_list = []
             if all_candidates:
-                primary_obj = {
-                    "product": all_candidates[0],
-                    "desc": "Лидер рейтинга для вашего сегмента"
-                }
+                primary_list.append({"product": all_candidates[0], "desc": "Лидер рейтинга"})
+                if len(all_candidates) > 1:
+                    primary_list.append({"product": all_candidates[1], "desc": "Альтернатива"})
             else:
-                primary_obj = {
-                    "product": CATALOG['debit'][0],
-                    "desc": "Универсальное решение"
-                }
+                primary_list.append({"product": CATALOG['debit'][0], "desc": "Универсальное решение"})
 
-            # 3. SECONDARY (ТАКТИКА) ===
             secondary_prod = None
             reason = "Специальное предложение"
             source = "Ecosystem"
 
-            excluded = [primary_obj['product']['name']]
+            excluded = [p['product']['name'] for p in primary_list]
 
             # А. Марков
             if pred_trend and pred_trend in PREDICTION_TAGS:
@@ -227,7 +199,7 @@ class RecommendationEngine:
                     reason = "Удобно для ночных покупок"
                     source = "🌙 Night Context"
 
-            # В. Fallback (Лучшее оставшееся)
+            # В. Fallback
             if not secondary_prod:
                 candidates = self._get_ranked_products(seg_tag, needed_tags, exclude_names=excluded)
                 if candidates:
@@ -248,7 +220,6 @@ class RecommendationEngine:
             except:
                 llm_text = f"Рекомендуем: {secondary_prod.get('name')}"
 
-            # ФИНАЛЬНЫЙ ОТВЕТ
             return {
                 "user_id": user_id,
                 "is_twin": is_twin,
@@ -256,9 +227,7 @@ class RecommendationEngine:
                 "segment_name": seg_name,
                 "last_cat": last_cat,
                 "stats": {"projected_spend": int(user_spend * mult)},
-
-                "primary": primary_obj,
-
+                "primary": primary_list,
                 "secondary": {
                     "type": source,
                     "product": secondary_prod,
@@ -270,7 +239,8 @@ class RecommendationEngine:
 
         except Exception as e:
             print(f"❌ Error logic for {user_id}: {e}")
-            # Возвращаем безопасную заглушку, чтобы UI не показывал ошибку
+            safe_list = [{"product": CATALOG['debit'][0], "desc": "Базовый продукт"}]
+
             return {
                 "user_id": user_id,
                 "is_twin": True,
@@ -278,7 +248,7 @@ class RecommendationEngine:
                 "segment_name": "New Client",
                 "last_cat": None,
                 "stats": {"projected_spend": 0},
-                "primary": {"product": CATALOG['debit'][0], "desc": "Базовый продукт"},
+                "primary": safe_list,
                 "secondary": {
                     "type": "⚙️ System",
                     "product": CATALOG['service'][2],

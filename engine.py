@@ -185,4 +185,25 @@ class RecommendationEngine:
         except Exception as e:
             # Для отладки выведем полный трейс
             print(f"❌ Error logic for {user_id}: {e}")
-            return None
+            safe_primary = CATALOG['debit'][0]
+            safe_secondary = CATALOG['service'][2]
+
+            return {
+                "user_id": user_id,
+                "is_twin": True,
+                "match_type": "🛡 Safe Fallback",
+                "segment_name": "New Client",
+                "last_cat": None,
+                "stats": {"projected_spend": 0},
+                "primary": {
+                    "product": safe_primary,
+                    "desc": "Базовый продукт для старта"
+                },
+                "secondary": {
+                    "type": "⚙️ System",
+                    "product": safe_secondary,
+                    "reason": "Рекомендуем для новых клиентов",
+                    "marketing_msg": "Начните знакомство с банком с удобных сервисов!"
+                },
+                "debug": {"error": str(e), "segment": "N/A", "trend": "N/A"}
+            }

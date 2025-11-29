@@ -96,11 +96,12 @@ class RecommendationEngine:
             target_id, match_type = self.matcher.find_twin(user_id, self.users.index)
 
         try:
-            # 2. Получаем профиль
             user_row = self.users.loc[target_id]
-            cluster_id = int(user_row['cluster_id'])
+            cluster_id_raw = user_row['cluster_id']
+            cluster_id = int(cluster_id_raw)  # Безопасное преобразование
 
-            # Распаковка 3 значений
+            print(f"DEBUG: User {target_id}, Raw Cluster: {cluster_id_raw}, Int Cluster: {cluster_id}")
+
             seg_tag, seg_name, mult = self._get_segment_info(cluster_id)
 
             # Распаковка 3 значений

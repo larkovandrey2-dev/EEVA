@@ -5,7 +5,7 @@ import json
 from dotenv import load_dotenv
 load_dotenv()
 API_KEY = os.getenv('API_KEY')
-
+CATALOG = "gpt://b1gcbn4fh3ils5usalqv/yandexgpt-5-pro/latest"
 
 class YandexGPT:
     def __init__(self):
@@ -20,23 +20,27 @@ class YandexGPT:
         Генерирует короткий продающий пуш.
         """
         # ПРОМПТ - Это самое важное. Задаем роль дерзкого маркетолога.
-        system_text = "Ты — опытный копирайтер банковского приложения. Твоя задача — писать короткие, цепляющие пуш-уведомления (до 15 слов). Используй 1 эмодзи. Тон: дружелюбный, но уверенный. Не используй слова 'Уважаемый клиент' или 'Предлагаем вам'."
+        system_text = "Ты — опытный копирайтер банковского приложения. Твоя задача — писать короткие, цепляющие пуш-уведомления (до 15 слов). Тон: дружелюбный, но уверенный. Не используй слова 'Уважаемый клиент' или 'Предлагаем вам'."
 
         user_text = f"""
-        Вводные данные:
-        - Сегмент клиента: {segment}
-        - Триггер (почему предлагаем): {context_trigger}
-        - Обоснование: {reason}
-        - Продукт: {product_name}
+                Напиши текст для пуш-уведомления.
 
-        Напиши текст уведомления, чтобы клиент захотел нажать.
-        """
+                ВВОДНЫЕ:
+                1. Продукт: "{product_name}" (Пиши только про него!)
+                2. Повод: {reason}
+                3. Клиент: {segment}
+
+                ЗАПРЕТЫ:
+                - Не выдумывай кешбэк или проценты, если их нет в названии.
+                - Не пиши "Уважаемый клиент".
+                - Если повод "после АЗС", а продукт "Автокредит", свяжи их логически ("Заправляйтесь и обновите авто").
+                """
 
         prompt = {
-            "modelUri": "gpt://b1gcbn4fh3ils5usalqv/yandexgpt-5-pro/latest",
+            "modelUri": CATALOG,
             "completionOptions": {
                 "stream": False,
-                "temperature": 0.7,  # Креативность (0.7 - оптимально)
+                "temperature": 0.6,
                 "maxTokens": 100
             },
             "messages": [
@@ -46,21 +50,13 @@ class YandexGPT:
         }
 
         try:
-            # Делаем запрос с таймаутом 3 секунды (чтобы UI не вис)
             response = requests.post(self.url, headers=self.headers, json=prompt, timeout=3)
-
             if response.status_code != 200:
-                print(f"⚠️ YaGPT Error: {response.status_code} - {response.text}")
-                return self._fallback(product_name)
+                return f"Рекомендуем: {product_name}"
 
             result = response.json()
             text = result['result']['alternatives'][0]['message']['text']
             return text.strip().replace('"', '')
 
-        except Exception as e:
-            print(f"⚠️ YaGPT Exception: {e}")
-            return self._fallback(product_name)
-
-    def _fallback(self, product_name):
-        """Заглушка, если API не ответил"""
-        return f"Специально для вас: {product_name}. Узнайте подробности!"
+        except:
+            return f"Ваше персональное предложение: {product_name}"

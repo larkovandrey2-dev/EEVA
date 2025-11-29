@@ -9,7 +9,7 @@ from psb_catalog import CATALOG, PREDICTION_TAGS, TREND_MAPPING
 
 class RecommendationEngine:
     def __init__(self, users_file, trans_file):
-        print("Загрузка ядра рекомендаций v5.3 (Clean Ru)...")
+        print("Loading EEVA Engine v6.0 (Final)...")
 
         # 1. Загрузка данных
         if users_file.endswith('.parquet'):
@@ -26,7 +26,7 @@ class RecommendationEngine:
         else:
             self.trans = pd.read_csv(trans_file)
 
-        # 2. Модуль поиска двойников
+        # 2. Модули
         twin_path = "clean_data/twin_index.pkl"
         if os.path.exists("clean_data/twin_index.pkl.bz2"):
             twin_path = "clean_data/twin_index.pkl.bz2"
@@ -34,40 +34,37 @@ class RecommendationEngine:
         self.matcher = TwinMatcher(twin_path)
         self.llm = YandexGPT()
 
-        # 3. Марковские цепи
+        # 3. Марков
         try:
             with open("markov_chains.json", "r", encoding='utf-8') as f:
                 self.markov = json.load(f)
-            print("Модель переходов: ПОДКЛЮЧЕНА")
+            print("Markov Model: CONNECTED")
         except:
             self.markov = {}
-            print("Модель переходов: НЕДОСТУПНА")
+            print("Markov Model: OFFLINE")
 
-        # 4. Матрица несовместимости (Кого с кем нельзя смешивать)
+        # 4.Матрица несовместимости
         self.INCOMPATIBILITY_MATRIX = {
             "YOUTH": ["VIP", "DEFENSE", "SAVER"],
             "SAVER": ["YOUTH", "VIP", "DEFENSE"],
             "VIP": ["YOUTH", "SAVER"],
             "DEFENSE": ["YOUTH"],
             "MASS": ["VIP", "DEFENSE"],
-            "CREDIT_RISK": ["VIP", "invest"]
+            "CREDIT_RISK": ["VIP", "invest", "luxury"]
         }
 
     def _get_segment_info(self, cluster_id):
-        # Возвращаем: (Тег, Название для UI, Мультипликатор дохода)
-        if cluster_id == 2: return "VIP", "Премиальный сегмент", 3.0
-        if cluster_id == 6: return "DEFENSE", "ОПК и Силовые структуры", 1.2
-        if cluster_id in [0, 5]: return "YOUTH", "Молодежный сегмент", 0.8
-        if cluster_id == 4: return "SAVER", "Сберегательная модель / Пенсионеры", 0.9
-        if cluster_id == 1: return "CREDIT_RISK", "Кредитная оптимизация", 0.7
-        return "MASS", "Массовый сегмент", 1.0
+        if cluster_id == 2: return "VIP", "💎 Premium / VIP", 3.0
+        if cluster_id == 6: return "DEFENSE", "🛡 ОПК / Силовые структуры", 1.2
+        if cluster_id in [0, 5]: return "YOUTH", "🌙 Student / Young", 0.8
+        if cluster_id == 4: return "SAVER", "🏠 Pensioner / Saver", 0.9
+        if cluster_id == 1: return "CREDIT_RISK", "⚠️ Credit Optimization", 0.7
+        return "MASS", "🛒 Mass Market", 1.0
 
     def _predict_next(self, user_id):
-        # Поиск следующей вероятной покупки
         try:
             user_tx = self.trans[self.trans['user_id'] == user_id]
         except:
-            # Fallback если ID строковый
             user_tx = self.trans[self.trans['user_id'] == str(user_id)]
 
         if user_tx.empty: return None, 0, None
@@ -77,45 +74,48 @@ class RecommendationEngine:
 
         if pred_data:
             raw_pred = pred_data['prediction']
+            prob = pred_data['probability']
+            DIVERSITY_MAP = {
+                "АЗС": ["Транспорт", "Дом и Ремонт", "Фастфуд"],
+                "Детские товары": ["Развлечения", "Аптеки", "Одежда и Спорт"],
+                "Дом и Ремонт": ["Электроника", "Транспорт"],
+                "Красота": ["Одежда и Спорт", "Развлечения", "Аптеки"],
+                "Путешествия": ["Транспорт", "Развлечения"],
+                "Развлечения": ["Фастфуд", "Красота"],
+                "Супермаркеты": ["Дом и Ремонт", "Аптеки", "Детские товары"],
+                "Фастфуд": ["Развлечения", "Транспорт"]
+            }
+
+            # 40% шанс выбрать альтернативный путь, если он есть
+            if last_action_raw in DIVERSITY_MAP and random.random() < 0.4:
+                raw_pred = random.choice(DIVERSITY_MAP[last_action_raw])
+
             trend = TREND_MAPPING.get(raw_pred, raw_pred)
-            return trend, pred_data['probability'], last_action_raw
+            return trend, prob, last_action_raw
 
         return None, 0, last_action_raw
 
     def _calculate_score(self, item, user_segment, user_tags):
-        """
-        Расчет релевантности продукта (Баллы)
-        """
         score = 0
         prod_segments = item.get('segment', [])
         prod_tags = item.get('tags', [])
-        prod_name = item.get('name', '')
-
-        # 1. БЛОКИРОВКА ПО СЕГМЕНТУ
         forbidden = self.INCOMPATIBILITY_MATRIX.get(user_segment, [])
         for fs in forbidden:
             if fs in prod_segments:
-                # Исключение: Mass продукты можно предлагать рисковым
-                if "MASS" in prod_segments and user_segment != "CREDIT_RISK":
+                if "MASS" in prod_segments and user_segment not in ["CREDIT_RISK", "VIP"]:
                     continue
+                if user_segment == "CREDIT_RISK" and fs in ["invest", "VIP"]:
+                    return -1
                 return -1
 
-        # 2. ПРИОРИТЕТ СЕГМЕНТА
         if user_segment in prod_segments:
-            score += 100  # Прямое попадание
+            score += 100
         elif "MASS" in prod_segments or "ALL" in prod_segments:
-            score += 20  # Универсальный продукт
+            score += 20
         else:
             return -1
-
-        # 3. ПРИОРИТЕТ ПОТРЕБНОСТЕЙ (ТЕГОВ)
         matches = sum(1 for t in prod_tags if t in user_tags)
         score += matches * 30
-
-        # 4. ШТРАФЫ
-        # Не предлагать кредит, если он не нужен явно
-        if "Кредит" in prod_name and "credit" not in user_tags and "debt" not in user_tags:
-            score -= 10
 
         return score
 
@@ -127,102 +127,104 @@ class RecommendationEngine:
             for item in items:
                 if item.get('name') in exclude_names:
                     continue
-
                 score = self._calculate_score(item, user_segment, user_tags)
                 if score > 0:
                     ranked_items.append((item, score))
 
-        # Сортировка по баллам
         ranked_items.sort(key=lambda x: (-x[1], x[0]['name']))
         return [r[0] for r in ranked_items]
 
     def recommend(self, user_id, time_of_day="Day"):
         target_id = user_id
         is_twin = False
-        match_type = "Реальный профиль"
+        match_type = "Real Data"
 
-        # 1. ПОИСК ДВОЙНИКА (ЕСЛИ НУЖНО)
+        # 1. Поиск Юзера / Двойника
         if user_id not in self.users.index:
             is_twin = True
             target_id, match_type = self.matcher.find_twin(user_id, self.users.index)
 
+        # Получаем данные профиля
         try:
-            # 2. ПОЛУЧЕНИЕ ПРОФИЛЯ
             if target_id in self.users.index:
                 user_row = self.users.loc[target_id]
-                cluster_id = int(float(user_row['cluster_id']))
-                user_spend = float(user_row['total_spend'])
+                try:
+                    cluster_id = int(float(user_row['cluster_id']))
+                except:
+                    cluster_id = 3
+
+                try:
+                    user_spend = float(user_row['total_spend'])
+                except:
+                    user_spend = 50000.0
             else:
-                # Аварийный режим (если даже двойника не нашли)
                 cluster_id = 3
                 user_spend = 50000.0
 
             seg_tag, seg_name, mult = self._get_segment_info(cluster_id)
             pred_trend, prob, last_cat = self._predict_next(target_id)
 
-            # 3. ФОРМИРОВАНИЕ ПОТРЕБНОСТЕЙ
             needed_tags = []
-            if user_spend > 100000:
+
+            # Логика для Кредитного Риска
+            if seg_tag == "CREDIT_RISK":
+                needed_tags = ['debt', 'optimization', 'cash']
+            # Логика для ОПК
+            elif seg_tag == "DEFENSE":
+                needed_tags = ['gov', 'salary', 'home']
+            # Логика по тратам
+            elif user_spend > 150000:
                 needed_tags.extend(['luxury', 'travel', 'invest'])
             elif user_spend > 50000:
                 needed_tags.extend(['shopping', 'cash', 'car'])
             else:
                 needed_tags.extend(['social', 'salary', 'saving'])
-
-            # Специфика сегментов
-            if seg_tag == "DEFENSE": needed_tags.append('gov')
-            if seg_tag == "YOUTH": needed_tags.extend(['entertainment', 'tech'])
-            if seg_tag == "CREDIT_RISK": needed_tags = ['debt', 'cash', 'optimization']
-
-            # 4. ПОДБОР СТРАТЕГИЧЕСКИХ ПРОДУКТОВ (PRIMARY)
             all_candidates = self._get_ranked_products(seg_tag, needed_tags)
 
             primary_list = []
             if all_candidates:
-                primary_list.append({"product": all_candidates[0], "desc": "Максимальное соответствие профилю"})
+                primary_list.append({"product": all_candidates[0], "desc": "Лидер рейтинга"})
                 if len(all_candidates) > 1:
-                    primary_list.append({"product": all_candidates[1], "desc": "Альтернативный вариант"})
+                    primary_list.append({"product": all_candidates[1], "desc": "Альтернатива"})
             else:
-                # Заглушка
-                debit_card = CATALOG.get('debit', [{}])[0]
-                primary_list.append({"product": debit_card, "desc": "Универсальное решение"})
+                primary_list.append({"product": CATALOG['debit'][0], "desc": "Универсальное решение"})
 
-            # 5. ПОДБОР ТАКТИЧЕСКИХ ПРОДУКТОВ (SECONDARY)
             secondary_prod = None
             reason = "Специальное предложение"
-            source = "Экосистема"
+            source = "Ecosystem"
 
-            # Исключаем то, что уже в Primary
-            excluded = [p['product'].get('name') for p in primary_list]
+            excluded = [p['product']['name'] for p in primary_list]
 
-            # А. Марков (Предиктивная аналитика)
+            # А. Марков (Instant Need)
             if pred_trend and pred_trend in PREDICTION_TAGS:
                 context_tags = PREDICTION_TAGS[pred_trend]
                 candidates = self._get_ranked_products(seg_tag, context_tags, exclude_names=excluded)
                 if candidates:
                     secondary_prod = candidates[0]
-                    reason = f"Актуально на основе последних покупок"  # Без названия категории, чтобы не пугать
-                    source = "Актуальная потребность"
+                    reason = f"Актуально после категории '{last_cat}'"
+                    source = "🔮 Instant Need"
 
-            # Б. Контекст времени (Ночь)
+            # Б. Ночь
             if not secondary_prod and time_of_day == "Night":
-                candidates = self._get_ranked_products(seg_tag, ['online', 'entertainment'], exclude_names=excluded)
+                candidates = self._get_ranked_products(seg_tag, ['online', 'entertainment', 'transfer'],
+                                                       exclude_names=excluded)
                 if candidates:
                     secondary_prod = candidates[0]
-                    reason = "Удобно для покупок в вечернее время"
-                    source = "Вечерний сценарий"
+                    reason = "Удобно для ночных операций"
+                    source = "🌙 Night Context"
 
-            # В. Умный подбор (Если нет явных сигналов)
+            # В. Fallback (Интересное предложение)
             if not secondary_prod:
-                candidates = self._get_ranked_products(seg_tag, needed_tags, exclude_names=excluded)
+                candidates = self._get_ranked_products(seg_tag, ['transfer', 'tech', 'cashback'],
+                                                       exclude_names=excluded)
                 if candidates:
                     secondary_prod = candidates[0]
                 else:
-                    secondary_prod = {"name": "СБП Плюс", "desc": "Сервис переводов"}
-                source = "Популярный выбор"
-                reason = "Часто выбирают клиенты вашего сегмента"
+                    secondary_prod = CATALOG['service'][2]  # СБП Плюс
+                source = "🏆 Best Seller"
+                reason = "Популярно в вашем сегменте"
 
-            # 6. ГЕНЕРАЦИЯ ТЕКСТА (LLM)
+            # LLM Генерация
             try:
                 llm_text = self.llm.generate_offer(
                     segment=seg_name,
@@ -231,9 +233,8 @@ class RecommendationEngine:
                     context_trigger=source
                 )
             except:
-                llm_text = f"Рекомендуем обратить внимание: {secondary_prod.get('name')}"
+                llm_text = f"Рекомендуем: {secondary_prod.get('name')}"
 
-            # ФИНАЛЬНАЯ СБОРКА ОТВЕТА
             return {
                 "user_id": user_id,
                 "is_twin": is_twin,
@@ -241,41 +242,39 @@ class RecommendationEngine:
                 "segment_name": seg_name,
                 "last_cat": last_cat,
                 "stats": {"projected_spend": int(user_spend * mult)},
-
                 "primary": primary_list,
-
                 "secondary": {
                     "type": source,
                     "product": secondary_prod,
                     "reason": reason,
                     "marketing_msg": llm_text
                 },
-
-                "debug": {
-                    "tags": needed_tags,
-                    "segment": seg_tag,
-                    "trend": pred_trend if pred_trend else "Не выявлен"
-                }
+                "debug": {"tags": needed_tags, "segment": seg_tag, "trend": pred_trend}
             }
 
         except Exception as e:
-            # Аварийный ответ (Safe Mode)
-            print(f"CRITICAL ERROR for {user_id}: {e}")
-            safe_prod = CATALOG.get('debit', [{}])[0]
-
+            print(f"❌ Error logic: {e}")
+            # Безопасный Fallback
+            safe_primary = [{"product": CATALOG['debit'][0], "desc": "Базовый продукт"}]
+            safe_secondary = {
+                "name": "СБП Плюс",
+                "desc": "Сервис быстрых платежей",
+                "segment": ["ALL"],
+                "tags": ["transfer"]
+            }
             return {
                 "user_id": user_id,
                 "is_twin": True,
-                "match_type": "Безопасный режим",
-                "segment_name": "Новый клиент",
+                "match_type": "🛡 Safe Fallback",
+                "segment_name": "New Client",
                 "last_cat": None,
                 "stats": {"projected_spend": 0},
-                "primary": [{"product": safe_prod, "desc": "Базовый продукт"}],
+                "primary": safe_primary,
                 "secondary": {
-                    "type": "Сервисное предложение",
-                    "product": {"name": "СБП", "desc": "Платежи"},
+                    "type": "⚙️ System",
+                    "product": safe_secondary,
                     "reason": "Популярный сервис",
-                    "marketing_msg": "Воспользуйтесь удобными переводами через СБП."
+                    "marketing_msg": "Начните с удобных сервисов ПСБ!"
                 },
                 "debug": {"error": str(e)}
             }

@@ -181,10 +181,10 @@ if st.button("Получить рекомендации"):
                              {source_type}
                         </div>
                         <div style="font-family: 'Montserrat', sans-serif; font-size: 1.3em; font-weight: 700; color: #111827; margin-bottom: 10px; line-height: 1.2;">
-                            {prod_s.get('name', 'Продукт')}
+                            {prod_s.get('name', 'Продукт') if type(prod_s) != str else prod_s}
                         </div>
                         <div style="font-size: 0.95em; color: #374151; margin-bottom: 20px; line-height: 1.5; font-weight: 400;">
-                            {prod_s.get('desc', '')}
+                            {prod_s.get('desc', '') if type(prod_s) != str else prod_s}
                         </div>
                         <div style="font-size: 0.9em; color: #000000; background: #F0F7FF; padding: 12px; border-radius: 6px; border-left: 4px solid #2B2C84;">
                             <b style="color: #2B2C84;">AI Инсайт:</b><br>{marketing_msg}
@@ -243,7 +243,7 @@ if st.button("Получить рекомендации"):
                 # Теги
                 sec_prod = rec.get('secondary', {}).get('product', {})
                 if sec_prod:
-                    tags = sec_prod.get('tags', [])
+                    tags = sec_prod.get('tags', []) if type(sec_prod) != str else []
                     # Красивые теги
                     tags_html = "".join([
                                             f"<span style='background:#E5E7EB; padding:2px 8px; border-radius:12px; margin-right:5px; font-size:0.8rem; color:#374151;'>#{t}</span>"

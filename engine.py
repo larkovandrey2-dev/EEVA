@@ -186,7 +186,7 @@ class RecommendationEngine:
             # Для отладки выведем полный трейс
             print(f"❌ Error logic for {user_id}: {e}")
             safe_primary = CATALOG['debit'][0]
-            safe_secondary = CATALOG['service'][2]
+            safe_secondary = "СБП Плюс"
 
             return {
                 "user_id": user_id,

@@ -9,3 +9,15 @@ if rec:
     print(rec)
 else:
     print("❌ Юзер не найден или ошибка")
+first_user_id = 25282222
+rec = engine.recommend(first_user_id)
+if rec:
+    print(rec)
+else:
+    print("❌ Юзер не найден или ошибка")
+first_user_id = 777
+rec = engine.recommend(first_user_id)
+if rec:
+    print(rec)
+else:
+    print("❌ Юзер не найден или ошибка")

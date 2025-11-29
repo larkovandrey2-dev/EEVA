@@ -1,26 +1,30 @@
-import json
-
 import pandas as pd
-import numpy as np
+import json
 from products import PSB_PRODUCTS, PREDICTION_OFFERS, TREND_MAPPING
+from twin_matcher import TwinMatcher
+
 
 class RecommendationEngine:
-    def __init__(self, user_file, trans_file):
-        print("Initializing Recommendation Engine V1.0")
-        self.users = pd.read_csv(user_file).set_index("user_id")
-        self.trans = pd.read_csv("clean_data/payments_ready_markov.zip", compression='zip', usecols=['user_id', 'category_final', 'brand_id'])
+    def __init__(self, users_file, trans_file):
+        print("Loading EEVA Engine...")
 
+        # 1. Данные (Активные юзеры)
+        self.users = pd.read_csv(users_file).set_index('user_id')
+        # Транзакции (Для Маркова)
+        self.trans = pd.read_csv(trans_file, usecols=['user_id', 'category_final', 'brand_id'])
+
+        # 2. Модуль Двойников (Smart Look-alike)
+        self.matcher = TwinMatcher("clean_data/twin_index.pkl")
+
+        # 3. Марков (Предсказания)
         try:
             with open("markov_chains.json", "r", encoding='utf-8') as f:
                 self.markov = json.load(f)
-            print("Markov chains connected")
-        except FileNotFoundError:
-            print("Markov file not found. Branch 3 disabled.")
+            print("Markov Model: CONNECTED")
+        except:
             self.markov = {}
-        print("Launched")
 
     def _get_segment_info(self, cluster_id):
-        # Множитель x120 для красивых цифр (компенсация короткого периода)
         base_mult = 120.0
         mapping = {
             2: ("VIP", "💎 VIP / High-Spender", base_mult * 0.8),
@@ -34,105 +38,100 @@ class RecommendationEngine:
         return mapping.get(cluster_id, ("MIDDLE", "🛒 Mass Market", base_mult))
 
     def _predict_next(self, user_id):
-        """Ветка 3: Марков + Маппинг в продукты ПСБ"""
         user_tx = self.trans[self.trans['user_id'] == user_id]
         if user_tx.empty: return None, 0, None, []
 
-        # Последнее действие пользователя
         last_action_raw = user_tx.iloc[-1]['category_final']
         recent_brands = user_tx['brand_id'].unique()[-3:].tolist()
 
-        # Предсказание Маркова (например: "Дом и Ремонт")
         pred_data = self.markov.get(last_action_raw)
-
         if pred_data:
-            pred_cat_raw = pred_data['prediction']  # "Дом и Ремонт"
-            prob = pred_data['probability']
-
-            # ВАЖНО: Превращаем категорию в Тренд ПСБ (через TREND_MAPPING)
-            # "Дом и Ремонт" -> "Ремонт"
-            # Если нет в маппинге, оставляем как есть
-            pred_trend = TREND_MAPPING.get(pred_cat_raw, pred_cat_raw)
-
-            return pred_trend, prob, last_action_raw, recent_brands
-
+            # Маппинг предсказания в Тренд ПСБ
+            pred_trend = TREND_MAPPING.get(pred_data['prediction'], pred_data['prediction'])
+            return pred_trend, pred_data['probability'], last_action_raw, recent_brands
         return None, 0, last_action_raw, recent_brands
 
     def recommend(self, user_id, time_of_day="Day"):
-        """
-        ОРКЕСТРАТОР
-        """
-        if user_id not in self.users.index: return None
+        target_id = user_id
+        is_twin = False
+        match_type = "Real Data"
 
-        # 1. ДАННЫЕ ЮЗЕРА
-        user_row = self.users.loc[user_id]
-        seg_tag, seg_name, mult = self._get_segment_info(user_row['cluster_id'])
-        proj_spend = int(user_row['total_spend'] * mult)
+        # Если юзера нет в активной базе -> Ищем двойника
+        if user_id not in self.users.index:
+            is_twin = True
+            # Передаем ID и список доступных активных юзеров для фолбэка
+            target_id, match_type = self.matcher.find_twin(user_id, self.users.index)
 
-        # 2. МАРКОВ (Паттерны)
-        # Получаем уже нормализованный тренд (например, "Ремонт" или "Спорт и Красота")
-        pred_trend, prob, last_cat, brands = self._predict_next(user_id)
+        try:
+            # Дальше работаем с target_id (Это или сам юзер, или его двойник)
+            user_row = self.users.loc[target_id]
+            seg_tag, seg_name, mult = self._get_segment_info(user_row['cluster_id'])
+            proj_spend = int(user_row['total_spend'] * mult)
 
-        # --- СБОРКА 1: ОСНОВНОЕ ПРЕДЛОЖЕНИЕ (Стратегия) ---
-        primary_prod = PSB_PRODUCTS[seg_tag]["default"]
-        primary_reason = f"Базовый продукт для профиля {seg_name}"
+            # Предсказания строим по истории target_id
+            pred_trend, prob, last_cat, brands = self._predict_next(target_id)
 
-        # --- СБОРКА 2: ДОПОЛНИТЕЛЬНОЕ ПРЕДЛОЖЕНИЕ (Тактика) ---
-        secondary_prod = None
-        secondary_reason = ""
-        insight_type = ""
+            # Основной продукт (Стратегия)
+            primary_prod = PSB_PRODUCTS[seg_tag]["default"]
+            primary_reason = f"Базовый продукт для профиля {seg_name}"
 
-        # Вариант А: Есть сильный сигнал от Маркова (и есть продукт ПСБ под этот тренд)
-        # Ищем предсказанный тренд в PREDICTION_OFFERS
-        if pred_trend and prob > 0.15 and pred_trend in PREDICTION_OFFERS:
-            secondary_prod = PREDICTION_OFFERS[pred_trend]
-            secondary_reason = f"После '{last_cat}' часто возникает потребность: '{pred_trend}' ({int(prob * 100)}%)"
-            insight_type = "🔮 AI Prediction"
+            # Дополнительный продукт (Тактика)
+            secondary_prod = None
+            secondary_reason = ""
+            insight_type = ""
 
-        # Вариант Б: Если Марков молчит -> Контекст (Ночь)
-        elif time_of_day == "Night" and "night" in PSB_PRODUCTS[seg_tag]:
-            secondary_prod = PSB_PRODUCTS[seg_tag]["night"]
-            secondary_reason = "Клиент активен в ночное время"
-            insight_type = "🌙 Context Rule"
+            # Вариант А: Марков
+            if pred_trend and prob > 0.15 and pred_trend in PREDICTION_OFFERS:
+                secondary_prod = PREDICTION_OFFERS[pred_trend]
+                secondary_reason = f"После '{last_cat}' часто возникает потребность: '{pred_trend}' ({int(prob * 100)}%)"
+                insight_type = "🔮 AI Prediction"
 
-        # Вариант В: Умный Upsell (Инвестиции)
-        elif "invest" in PSB_PRODUCTS[seg_tag]:
-            secondary_prod = PSB_PRODUCTS[seg_tag]["invest"]
-            secondary_reason = "Предложение для накопления капитала"
-            insight_type = "💰 Smart Upsell"
+            # Вариант Б: Ночь
+            elif time_of_day == "Night" and "night" in PSB_PRODUCTS[seg_tag]:
+                secondary_prod = PSB_PRODUCTS[seg_tag]["night"]
+                secondary_reason = "Клиент активен в ночное время"
+                insight_type = "🌙 Context Rule"
 
-        # Заглушка, если вообще ничего не нашлось (редко)
-        else:
-            secondary_prod = {"name": "Система быстрых платежей", "desc": "Переводы без комиссии."}
-            secondary_reason = "Полезный сервис"
-            insight_type = "⚙️ Service"
+            # Вариант В: Инвестиции
+            elif "invest" in PSB_PRODUCTS[seg_tag]:
+                secondary_prod = PSB_PRODUCTS[seg_tag]["invest"]
+                secondary_reason = "Предложение для накопления капитала"
+                insight_type = "💰 Smart Upsell"
 
-        return {
-            "user_id": user_id,
-            "segment_name": seg_name,
-            "stats": {"projected_month_spend": proj_spend},
-            "recent_brands": brands,
+            # Фолбэк (СБП)
+            else:
+                secondary_prod = {"name": "СБП", "desc": "Переводы без комиссии."}
+                secondary_reason = "Полезный сервис"
+                insight_type = "⚙️ Service"
 
-            "primary": {
-                "type": "Strategic Offer",
-                "product": primary_prod,
-                "reason": primary_reason
-            },
-            "secondary": {
-                "type": insight_type,
-                "product": secondary_prod,
-                "reason": secondary_reason
+            return {
+                "user_id": user_id,
+                "is_twin": is_twin,
+                "match_type": match_type,  # Тип совпадения (Real / SocDem / Random)
+                "segment_name": seg_name,
+                "stats": {"projected_month_spend": proj_spend},
+                "recent_brands": brands,
+                "primary": {
+                    "type": "Strategic Offer",
+                    "product": primary_prod,
+                    "reason": primary_reason
+                },
+                "secondary": {
+                    "type": insight_type,
+                    "product": secondary_prod,
+                    "reason": secondary_reason
+                }
             }
-        }
+
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            return None
 
     def get_llm_prompt(self, data):
         if not data: return ""
         sec = data['secondary']
         return f"""
         Ты ассистент банка ПСБ. Клиент: {data['segment_name']} (Прогноз: {data['stats']['projected_month_spend']} ₽).
-
-        1. Предложи ОСНОВНОЙ продукт: "{data['primary']['product']['name']}" ({data['primary']['product']['desc']}).
-        2. Добавь "КСТАТИ" (Cross-sell): "{sec['product']['name']}" ({sec['reason']}).
-
-        Сделай это одним связным, продающим сообщением. Упомяни выгоду.
+        Предложи: "{data['primary']['product']['name']}" И "{sec['product']['name']}".
+        Аргумент: {sec['reason']}.
         """

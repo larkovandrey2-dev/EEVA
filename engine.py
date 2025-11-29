@@ -10,8 +10,8 @@ class RecommendationEngine:
     def __init__(self, users_file, trans_file):
         print("Loading EEVA Engine v3.1 (Fixed)")
         # Грузим данные
-        self.users = pd.read_csv(users_file).set_index('user_id')
-        self.trans = pd.read_csv(trans_file, usecols=['user_id', 'category_final', 'brand_id'])
+        self.users = pd.read_parquet(users_file).set_index('user_id')
+        self.trans = pd.read_parquet(trans_file, usecols=['user_id', 'category_final', 'brand_id'])
 
         # Модули
         self.matcher = TwinMatcher("clean_data/twin_index.pkl.bz2")

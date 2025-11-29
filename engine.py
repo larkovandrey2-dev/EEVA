@@ -54,12 +54,12 @@ class RecommendationEngine:
         }
 
     def _get_segment_info(self, cluster_id):
-        if cluster_id == 2: return "VIP", "💎 Premium / VIP", 3.0
-        if cluster_id == 6: return "DEFENSE", "🛡 ОПК / Силовые структуры", 1.2
-        if cluster_id in [0, 5]: return "YOUTH", "🌙 Student / Young", 0.8
-        if cluster_id == 4: return "SAVER", "🏠 Pensioner / Saver", 0.9
-        if cluster_id == 1: return "CREDIT_RISK", "⚠️ Credit Optimization", 0.7
-        return "MASS", "🛒 Mass Market", 1.0
+        if cluster_id == 2: return "VIP", "Премиальный сегмент", 3.0
+        if cluster_id == 6: return "DEFENSE", "ОПК и Силовые структуры", 1.2
+        if cluster_id in [0, 5]: return "YOUTH", "Молодежный сегмент", 0.8
+        if cluster_id == 4: return "SAVER", "Сберегательная модель / Пенсионеры", 0.9
+        if cluster_id == 1: return "CREDIT_RISK", "Кредитная оптимизация", 0.7
+        return "MASS", "Массовый сегмент", 1.0
 
     def _predict_next(self, user_id):
         try:
@@ -241,7 +241,7 @@ class RecommendationEngine:
                 "match_type": match_type,
                 "segment_name": seg_name,
                 "last_cat": last_cat,
-                "stats": {"projected_spend": int(user_spend * mult)},
+                "stats": {"projected_spend": int(user_spend)},
                 "primary": primary_list,
                 "secondary": {
                     "type": source,

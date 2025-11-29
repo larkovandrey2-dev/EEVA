@@ -12,7 +12,7 @@ st.set_page_config(page_title="PSB Smart Offers", layout="centered")
 def get_engine():
     return RecommendationEngine(USERS_PATH, TRANS_PATH)
 
-
+engine = None
 try:
     engine = get_engine()
     data_loaded = True

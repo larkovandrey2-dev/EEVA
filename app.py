@@ -10,15 +10,21 @@ st.set_page_config(page_title="PSB Smart Offers", layout="centered")
 
 @st.cache_resource(show_spinner="Загрузка AI ядра...")
 def get_engine():
+    # Проверка перед загрузкой
+    import os
+    if not os.path.exists(USERS_PATH):
+        raise FileNotFoundError(f"Файл не найден: {USERS_PATH}")
     return RecommendationEngine(USERS_PATH, TRANS_PATH)
 
+# Инициализация переменной
+engine = None
 
 try:
     engine = get_engine()
-    data_loaded = True
 except Exception as e:
-    st.error(f"Engine Load Error: {e}")
-    data_loaded = False
+    st.error(f"❌ Ошибка запуска: {e}")
+    st.code("Попробуй удалить 'from dotenv import ...' в файле yagpt_client.py")
+    st.stop()
 
 
 st.markdown("""

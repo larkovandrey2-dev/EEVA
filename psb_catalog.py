@@ -43,7 +43,7 @@ CATALOG = {
             "tags": ["shopping", "food", "lifestyle"]
         },
         {
-            "name": "Дебетовая карта «ПСБ — ЦСКА»",
+            "name": "Дебетовая карта «ПСБ - ЦСКА»",
             "desc": "Эксклюзивная карта для болельщиков ПФК ЦСКА.",
             "segment": ["MASS", "YOUTH"],
             "tags": ["sport", "entertainment"]

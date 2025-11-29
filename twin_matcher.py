@@ -6,13 +6,13 @@ import bz2
 
 class TwinMatcher:
     def __init__(self, index_path):
-        print("🧬 Initializing TwinMatcher Module...")
+        print("🧬 Инициализация модуля по поиску двойников...")
         try:
             with bz2.open(index_path, "rb") as f:
                 data = pickle.load(f)
                 self.twin_map = data['twin_map']  # (Soc, Reg) -> ActiveID
                 self.user_meta = data['user_meta']  # UserID -> {Soc, Reg}
-            print(f"✅ TwinMatcher Ready. Indexed Users: {len(self.user_meta):,}")
+            print(f"✅ Поисковик двойников готов. Индексы пользователей: {len(self.user_meta):,}")
         except Exception as e:
             print(f"⚠️ Twin Index Error: {e}. Fallback mode active.")
             self.twin_map = {}
@@ -27,7 +27,7 @@ class TwinMatcher:
 
         # 1. Защита: Если юзера нет в метаданных -> Глобальный Рандом
         if user_id not in self.user_meta:
-            return self._get_fallback(active_user_ids), "🎲 Unknown Profile"
+            return self._get_fallback(active_user_ids), "🎲 Неизвестный профиль"
 
         # 2. Получаем метаданные
         meta = self.user_meta[user_id]
@@ -48,25 +48,25 @@ class TwinMatcher:
         # LEVEL 1: Exact Match (Точное попадание)
         # "Такой же пенсионер из того же города"
         if (soc, reg) in self.twin_map:
-            return self.twin_map[(soc, reg)], "⭐ Exact Match"
+            return self.twin_map[(soc, reg)], "⭐ Точное совпадение"
 
         # LEVEL 2: SocDem Only (Игнорируем регион)
         # "Такой же пенсионер, но из другого города"
         if soc != -1:
             for (k_soc, k_reg), t_id in self.twin_map.items():
                 if k_soc == soc:
-                    return t_id, "🧬 SocDem Look-alike"
+                    return t_id, "🧬 Соц-дем схожесть"
 
         # LEVEL 3: Region Only (Игнорируем возраст)
         # "Земляк (кто-то из того же города)"
         if reg != -1:
             for (k_soc, k_reg), t_id in self.twin_map.items():
                 if k_reg == reg:
-                    return t_id, "🌍 Region Look-alike"
+                    return t_id, "🌍 Региональная схожесть"
 
         # LEVEL 4: Safe Fallback (Если ничего не совпало)
         # Берем случайного из активной базы
-        return self._get_fallback(active_user_ids), "🛡 Safe Fallback"
+        return self._get_fallback(active_user_ids), "🛡 Безопасная заглушка"
 
     def _get_fallback(self, all_ids):
         # Возвращаем случайный ID из списка

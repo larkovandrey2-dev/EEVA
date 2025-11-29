@@ -1,137 +1,187 @@
 import pandas as pd
 import json
-from products import PSB_PRODUCTS, PREDICTION_OFFERS, TREND_MAPPING
+import random
 from twin_matcher import TwinMatcher
+from yagpt_client import YandexGPT
+from psb_catalog import CATALOG, PREDICTION_TAGS, TREND_MAPPING
 
 
 class RecommendationEngine:
     def __init__(self, users_file, trans_file):
-        print("Loading EEVA Engine...")
-
-        # 1. Данные (Активные юзеры)
+        print("Loading EEVA Engine v3.1 (Fixed)")
+        # Грузим данные
         self.users = pd.read_csv(users_file).set_index('user_id')
-        # Транзакции (Для Маркова)
         self.trans = pd.read_csv(trans_file, usecols=['user_id', 'category_final', 'brand_id'])
 
-        # 2. Модуль Двойников (Smart Look-alike)
+        # Модули
         self.matcher = TwinMatcher("clean_data/twin_index.pkl")
+        self.llm = YandexGPT()
 
-        # 3. Марков (Предсказания)
+        # Марков
         try:
             with open("markov_chains.json", "r", encoding='utf-8') as f:
                 self.markov = json.load(f)
-            print("Markov Model: CONNECTED")
+            print("✅ Markov Model: CONNECTED")
         except:
             self.markov = {}
+            print("⚠️ Markov Model: OFFLINE")
 
     def _get_segment_info(self, cluster_id):
-        base_mult = 120.0
-        mapping = {
-            2: ("VIP", "💎 VIP / High-Spender", base_mult * 0.8),
-            5: ("YOUTH", "🌙 Young & Active", base_mult * 1.2),
-            0: ("YOUTH", "🌙 Young & Active", base_mult * 1.2),
-            4: ("SAVER", "🛡 Rational Saver", base_mult * 1.0),
-            6: ("MIDDLE", "💼 Upper Mass (Gold)", base_mult * 1.0),
-            1: ("MIDDLE", "⚠️ Credit Risk", base_mult * 1.1),
-            3: ("MIDDLE", "💄 Lifestyle / Beauty", base_mult * 1.0)
-        }
-        return mapping.get(cluster_id, ("MIDDLE", "🛒 Mass Market", base_mult))
+        # Возвращает 3 значения: TAG, Name, Multiplier
+        if cluster_id == 2: return "VIP", "💎 Premium / VIP", 3.0
+        if cluster_id == 6: return "DEFENSE", "🛡 ОПК / Силовые структуры", 1.2
+        if cluster_id in [0, 5]: return "YOUTH", "🌙 Student / Young", 0.8
+        if cluster_id == 4: return "SAVER", "🏠 Pensioner / Saver", 0.9
+        if cluster_id == 1: return "CREDIT_RISK", "⚠️ Credit Optimization", 0.7
+        return "MASS", "🛒 Mass Market", 1.0
 
     def _predict_next(self, user_id):
+        """
+        Возвращает ровно 3 значения:
+        1. Тренд (строка или None)
+        2. Вероятность (float)
+        3. Последняя категория (строка или None)
+        """
         user_tx = self.trans[self.trans['user_id'] == user_id]
-        if user_tx.empty: return None, 0, None, []
+
+        if user_tx.empty:
+            return None, 0, None
 
         last_action_raw = user_tx.iloc[-1]['category_final']
-        recent_brands = user_tx['brand_id'].unique()[-3:].tolist()
 
         pred_data = self.markov.get(last_action_raw)
+
         if pred_data:
-            # Маппинг предсказания в Тренд ПСБ
-            pred_trend = TREND_MAPPING.get(pred_data['prediction'], pred_data['prediction'])
-            return pred_trend, pred_data['probability'], last_action_raw, recent_brands
-        return None, 0, last_action_raw, recent_brands
+            # Маппим сырое предсказание на наш каталог
+            raw_pred = pred_data['prediction']
+            trend = TREND_MAPPING.get(raw_pred, raw_pred)
+            return trend, pred_data['probability'], last_action_raw
+
+        return None, 0, last_action_raw
+
+    def _find_best_product(self, segment, tags, exclude_name=None):
+        candidates = []
+
+        for category, items in CATALOG.items():
+            for item in items:
+                if exclude_name and item['name'] == exclude_name:
+                    continue
+
+                # Проверка сегмента или ALL
+                if segment in item['segment'] or "ALL" in item['segment'] or "MASS" in item['segment']:
+
+                    matches = sum(1 for t in item['tags'] if t in tags)
+
+                    if matches > 0:
+                        candidates.append((item, matches * 2))  # Приоритет тегам
+                    else:
+                        candidates.append((item, 1))  # Просто сегмент
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        # Берем рандом из топ-3 для вариативности
+        top_n = candidates[:3]
+        return random.choice(top_n)[0]
 
     def recommend(self, user_id, time_of_day="Day"):
         target_id = user_id
         is_twin = False
         match_type = "Real Data"
 
-        # Если юзера нет в активной базе -> Ищем двойника
+        # 1. Twin Logic
         if user_id not in self.users.index:
             is_twin = True
-            # Передаем ID и список доступных активных юзеров для фолбэка
             target_id, match_type = self.matcher.find_twin(user_id, self.users.index)
 
         try:
-            # Дальше работаем с target_id (Это или сам юзер, или его двойник)
+            # 2. Получаем профиль
             user_row = self.users.loc[target_id]
-            seg_tag, seg_name, mult = self._get_segment_info(user_row['cluster_id'])
-            proj_spend = int(user_row['total_spend'] * mult)
+            cluster_id = int(user_row['cluster_id'])
 
-            # Предсказания строим по истории target_id
-            pred_trend, prob, last_cat, brands = self._predict_next(target_id)
+            # Распаковка 3 значений
+            seg_tag, seg_name, mult = self._get_segment_info(cluster_id)
 
-            # Основной продукт (Стратегия)
-            primary_prod = PSB_PRODUCTS[seg_tag]["default"]
-            primary_reason = f"Базовый продукт для профиля {seg_name}"
+            # Распаковка 3 значений
+            pred_trend, prob, last_cat = self._predict_next(target_id)
 
-            # Дополнительный продукт (Тактика)
-            secondary_prod = None
-            secondary_reason = ""
-            insight_type = ""
-
-            # Вариант А: Марков
-            if pred_trend and prob > 0.15 and pred_trend in PREDICTION_OFFERS:
-                secondary_prod = PREDICTION_OFFERS[pred_trend]
-                secondary_reason = f"После '{last_cat}' часто возникает потребность: '{pred_trend}' ({int(prob * 100)}%)"
-                insight_type = "🔮 AI Prediction"
-
-            # Вариант Б: Ночь
-            elif time_of_day == "Night" and "night" in PSB_PRODUCTS[seg_tag]:
-                secondary_prod = PSB_PRODUCTS[seg_tag]["night"]
-                secondary_reason = "Клиент активен в ночное время"
-                insight_type = "🌙 Context Rule"
-
-            # Вариант В: Инвестиции
-            elif "invest" in PSB_PRODUCTS[seg_tag]:
-                secondary_prod = PSB_PRODUCTS[seg_tag]["invest"]
-                secondary_reason = "Предложение для накопления капитала"
-                insight_type = "💰 Smart Upsell"
-
-            # Фолбэк (СБП)
+            # 3. Выбор Primary продукта
+            user_spend = user_row['total_spend']
+            if user_spend > 80000:
+                needed_tags = ['luxury', 'travel', 'saving']
             else:
-                secondary_prod = {"name": "СБП", "desc": "Переводы без комиссии."}
-                secondary_reason = "Полезный сервис"
-                insight_type = "⚙️ Service"
+                needed_tags = ['shopping', 'cash', 'salary']
+
+            primary_prod = self._find_best_product(seg_tag, needed_tags)
+
+            # Fallback
+            if not primary_prod:
+                primary_prod = CATALOG['debit'][0]
+
+            # 4. Выбор Secondary (Context) продукта
+            secondary_prod = None
+            reason = "Специальное предложение"
+            source = "Ecosystem"
+            context_tags = []
+
+            # Логика Маркова
+            if pred_trend and pred_trend in PREDICTION_TAGS:
+                context_tags = PREDICTION_TAGS[pred_trend]
+                reason = f"Актуально после категории '{last_cat}'"
+                source = "🔮 Instant Need"
+
+            # Логика Времени
+            elif time_of_day == "Night":
+                context_tags = ['entertainment', 'transfer', 'online']
+                reason = "Для ночных покупок и развлечений"
+                source = "🌙 Night Context"
+
+            # Логика Лайфстайла (если нет Маркова)
+            else:
+                context_tags = ['saving', 'debt']
+                reason = "Персонально для вас"
+                source = "🧠 Smart Fit"
+
+            # Ищем продукт, исключая Primary
+            secondary_prod = self._find_best_product(seg_tag, context_tags, exclude_name=primary_prod['name'])
+
+            # Fallback Secondary
+            if not secondary_prod:
+                secondary_prod = self._find_best_product(seg_tag, [], exclude_name=primary_prod['name'])
+                if not secondary_prod:  # Если совсем всё плохо
+                    secondary_prod = CATALOG['service'][2]  # СБП Плюс
+                source = "🏆 Best Seller"
+
+            # 5. Генерация текста (LLM)
+            # Чтобы не падало, добавим try/except на сам вызов LLM
+            try:
+                llm_text = self.llm.generate_offer(
+                    segment=seg_name,
+                    product_name=secondary_prod['name'],
+                    reason=reason,
+                    context_trigger=source
+                )
+            except:
+                llm_text = f"Рекомендуем: {secondary_prod['name']}"
 
             return {
                 "user_id": user_id,
                 "is_twin": is_twin,
-                "match_type": match_type,  # Тип совпадения (Real / SocDem / Random)
+                "match_type": match_type,
                 "segment_name": seg_name,
-                "stats": {"projected_month_spend": proj_spend},
-                "recent_brands": brands,
-                "primary": {
-                    "type": "Strategic Offer",
-                    "product": primary_prod,
-                    "reason": primary_reason
-                },
+                "stats": {"projected_spend": int(user_row['total_spend'] * mult)},
+                "primary": {"product": primary_prod, "desc": "Базовый продукт"},
                 "secondary": {
-                    "type": insight_type,
+                    "type": source,
                     "product": secondary_prod,
-                    "reason": secondary_reason
-                }
+                    "reason": reason,
+                    "marketing_msg": llm_text
+                },
+                "debug": {"tags": context_tags, "segment": seg_tag, "trend": pred_trend}
             }
 
         except Exception as e:
-            print(f"❌ Error: {e}")
+            # Для отладки выведем полный трейс
+            print(f"❌ Error logic for {user_id}: {e}")
             return None
-
-    def get_llm_prompt(self, data):
-        if not data: return ""
-        sec = data['secondary']
-        return f"""
-        Ты ассистент банка ПСБ. Клиент: {data['segment_name']} (Прогноз: {data['stats']['projected_month_spend']} ₽).
-        Предложи: "{data['primary']['product']['name']}" И "{sec['product']['name']}".
-        Аргумент: {sec['reason']}.
-        """

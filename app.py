@@ -126,7 +126,7 @@ if st.button("Получить рекомендации"):
                     html = f"""
                     <div style="background-color: #FFFFFF; padding: 20px; border-radius: 0 12px 12px 12px; border: 1px solid #D1D5DB; border-top: 6px solid #EA5614; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-top: -16px;">
                         <div style="color: #EA5614; font-weight: 800; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
-                            {badge_text}
+                            {badge_text} 
                         </div>
                         <div style="font-family: 'Montserrat', sans-serif; font-size: 1.3em; font-weight: 700; color: #111827; margin-bottom: 10px; line-height: 1.2;">
                             {prod.get('name', 'Продукт')}

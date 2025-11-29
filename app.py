@@ -194,6 +194,7 @@ if st.button("Подобрать продукты"):
 
             # --- ОТСТУП ---
             st.markdown("<br>", unsafe_allow_html=True)
+            st.header("Профиль пользователя")
 
             # ==========================================
             # ВЕРХНИЙ РЯД: 2 ПЛИТКИ (PRIMARY)
@@ -309,7 +310,7 @@ if st.button("Подобрать продукты"):
                 d1.metric("Сегмент", debug_info.get('segment', 'N/A'))
                 d2.metric("Тип данных", "Двойник" if is_twin else "Реальные")
                 d3.metric("Алгоритм", match_type.split()[0])
-                d4.metric("Прогноз трат", f"{stats.get('projected_spend', 0)} ₽")
+                d4.metric("Прогноз трат", f"{stats.get('projected_spend', 0)} У.Е")
 
                 st.divider()
                 st.markdown("<h5 style='color: #2B2C84; margin-bottom: 10px;'>🧠 Логика принятия решений</h5>",

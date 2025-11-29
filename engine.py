@@ -54,13 +54,12 @@ class RecommendationEngine:
         }
 
     def _get_segment_info(self, cluster_id):
-        if cluster_id == 2: return "VIP", "Премиальный сегмент", 3.0
-        if cluster_id == 6: return "DEFENSE", "ОПК и Силовые структуры", 1.2
-        if cluster_id in [0, 5]: return "YOUTH", "Молодежный сегмент", 0.8
-        if cluster_id == 4: return "SAVER", "Сберегательная модель / Пенсионеры", 0.9
-        if cluster_id == 1: return "CREDIT_RISK", "Кредитная оптимизация", 0.7
+        if cluster_id == 2: return "ПРЕМИУМ", "Премиальный сегмент", 3.0
+        if cluster_id == 6: return "ОПК", "ОПК и Силовые структуры", 1.2
+        if cluster_id in [0, 5]: return "МОЛОДЁЖЬ", "Молодежный сегмент", 0.8
+        if cluster_id == 4: return "ЭКОНОМИСТ", "Сберегательная модель / Пенсионеры", 0.9
+        if cluster_id == 1: return "КРЕДИТНЫЙ РИСК", "Кредитная оптимизация", 0.7
         return "MASS", "Массовый сегмент", 1.0
-
     def _predict_next(self, user_id):
         try:
             user_tx = self.trans[self.trans['user_id'] == user_id]

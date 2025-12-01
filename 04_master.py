@@ -7,7 +7,7 @@ INPUT_PAY = f"{CLEAN_DIR}/payments_ready.csv"     # Файл из Шага 2 (и
 INPUT_USERS = f"{CLEAN_DIR}/train_users_10k.csv"  # Список юзеров (если есть)
 OUTPUT_FILE = f"{CLEAN_DIR}/master_features_final.csv"
 
-print("[STEP 4] Сборка финальных фичей (Fix Time)...")
+print("Сборка финальных фичей")
 
 # 1. Загрузка
 pay = pd.read_csv(INPUT_PAY)
@@ -19,9 +19,9 @@ except:
     users = pd.DataFrame({'user_id': pay['user_id'].unique()})
 
 
-print("Обработка времени...")
+print("Обработка времени.")
 
-# Парсим timedelta (у тебя формат "1100 days...")
+# Парсим timedelta
 pay['td'] = pd.to_timedelta(pay['timestamp'], errors='coerce')
 
 # Вытаскиваем час и день
@@ -31,10 +31,10 @@ pay['day_idx'] = pay['td'].dt.days % 7
 pay['is_night'] = pay['hour'].apply(lambda x: 1 if 0 <= x < 6 else 0)
 pay['is_weekend'] = pay['day_idx'].apply(lambda x: 1 if x >= 5 else 0)
 
-print("   -> Флаги времени созданы.")
+print("Флаги времени созданы.")
 
 
-print("Считаем деньги...")
+print("Считаем деньги.")
 
 # Разделяем расходы и доходы
 expenses = pay[pay['price'] < 0].copy()
@@ -42,7 +42,7 @@ incomes = pay[pay['price'] > 0].copy()
 
 # 3.1 Статистика расходов
 spend_stats = expenses.groupby('user_id').agg({
-    'price': ['sum', 'count', 'mean', 'min'] # min отрицательный = макс трата
+    'price': ['sum', 'count', 'mean', 'min']
 }).reset_index()
 spend_stats.columns = ['user_id', 'total_spend', 'tx_count', 'avg_check', 'max_spend']
 
@@ -52,10 +52,9 @@ spend_stats['max_spend'] = spend_stats['max_spend'].abs()
 
 income_stats = incomes.groupby('user_id')['price'].sum().reset_index(name='total_income')
 
-print("Считаем привычки (Ночь/Выходные)...")
+print("Считаем привычки (Ночь/Выходные).")
 
 # Мы просто берем среднее от флагов по всем транзакциям юзера
-# Если user купил 10 раз, и 2 раза ночью -> mean = 0.2 (20%)
 time_stats = pay.groupby('user_id').agg({
     'is_night': 'mean',
     'is_weekend': 'mean'
@@ -63,12 +62,12 @@ time_stats = pay.groupby('user_id').agg({
 
 time_stats.columns = ['user_id', 'night_share', 'weekend_share']
 
-print("Cчитаем категории...")
+print("Cчитаем категории.")
 
 # Pivot: строки=юзеры, столбцы=категории
 cats_pivot = expenses.pivot_table(
     index='user_id',
-    columns='category_final', # Твоя колонка с русскими названиями
+    columns='category_final',
     values='price',
     aggfunc='sum',
     fill_value=0
@@ -84,10 +83,10 @@ master = users[['user_id']].drop_duplicates().copy()
 # Приклеиваем всё по очереди
 master = master.merge(spend_stats, on='user_id', how='left')
 master = master.merge(income_stats, on='user_id', how='left')
-master = master.merge(time_stats, on='user_id', how='left') # Вот теперь это сработает
+master = master.merge(time_stats, on='user_id', how='left')
 master = master.merge(cats_share, on='user_id', how='left')
 
-# Заполняем пропуски нулями (для тех, кто ничего не тратил)
+# Заполняем пропуски нулями
 master = master.fillna(0)
 
 # Доп. фича: % Сбережений

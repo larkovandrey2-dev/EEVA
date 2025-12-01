@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 
-print("🚀 [STEP: PREPARE] Подготовка данных с Умным Заполнением (Smart Augmentation)...")
+print("Подготовка данных с Умным Заполнением")
 
 # --- НАСТРОЙКИ ---
 CLEAN_DIR = "clean_data"
@@ -16,8 +16,7 @@ if not os.path.exists(PAY_FILE):
 # Файл с кластерами (обязателен для умного заполнения)
 CLUSTERS_FILE = f"{CLEAN_DIR}/users_clustered.csv"
 
-# --- 1. ЗАГРУЗКА ДАННЫХ ---
-print(f"   -> Читаем транзакции: {PAY_FILE}")
+print(f"Читаем транзакции: {PAY_FILE}")
 try:
     pay = pd.read_csv(PAY_FILE)
 except Exception as e:
@@ -30,7 +29,7 @@ try:
     # Оставляем только нужное
     users = users[['user_id', 'cluster_id']]
 except Exception as e:
-    print(f"⚠️ Файл кластеров не найден! Умное заполнение будет работать как обычный рандом.")
+    print(f"Файл кластеров не найден! Умное заполнение будет работать как обычный рандом.")
     users = pd.DataFrame(columns=['user_id', 'cluster_id'])
 
 # Объединяем транзакции с кластерами
@@ -38,7 +37,6 @@ pay = pay.merge(users, on='user_id', how='left')
 # Если кластера нет (юзер выпал), ставим -1
 pay['cluster_id'] = pay['cluster_id'].fillna(-1).astype(int)
 
-# --- 2. РАБОТА С БРЕНДАМИ (Items.pq) ---
 # Приводим brand_id к строке
 if 'brand_id' in pay.columns:
     pay['brand_id'] = pay['brand_id'].fillna(-1).astype(str).str.replace('.0', '', regex=False)
@@ -48,7 +46,7 @@ items_path = f"{RAW_DIR}/items.pq"
 
 if os.path.exists(items_path):
     try:
-        print("   -> Подгружаем справочник брендов...")
+        print("Подгружаем справочник брендов...")
         items = pd.read_parquet(items_path, columns=['brand_id', 'category'])
         items['brand_id'] = items['brand_id'].astype(str)
 
@@ -61,7 +59,6 @@ if os.path.exists(items_path):
 # Мапим реальные категории
 pay['real_category'] = pay['brand_id'].map(brand_map).fillna("Unknown")
 
-# --- 3. ПЕРЕВОД НА РУССКИЙ ---
 translation = {
     'Foodstuffs and Beverages': 'Супермаркеты',
     'Cosmetics, Personal Care, and Health Maintenance Products': 'Красота',
@@ -78,8 +75,7 @@ translation = {
 }
 pay['category_final'] = pay['real_category'].apply(lambda x: translation.get(x, "Прочее"))
 
-# --- 4. SMART FILLING (Синтетическое обогащение по профилю) ---
-print("   🧠 Запускаем генерацию категорий на основе Кластеров...")
+print("Запускаем генерацию категорий на основе Кластеров.")
 
 
 # Функция-помощник для заполнения по маске
@@ -90,7 +86,6 @@ def fill_by_cluster(df, cluster_ids, categories, probs):
 
     if count > 0:
         # Генерируем случайные категории с учетом весов
-        # np.random.seed(42) # Можно включить для воспроизводимости
         fill_values = np.random.choice(categories, size=count, p=probs)
         df.loc[mask, 'category_final'] = fill_values
         print(f"      -> Заполнено {count} строк для кластеров {cluster_ids}")

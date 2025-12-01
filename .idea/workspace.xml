@@ -4,24 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="818e91d5-7c85-43a0-8815-af6e0f7e762d" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/01_data_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/01_data_loader.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/02_real_categories.py" beforeDir="false" afterPath="$PROJECT_DIR$/02_real_categories.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/04_master.py" beforeDir="false" afterPath="$PROJECT_DIR$/04_master.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/05_clustering.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/build_markov.py" beforeDir="false" afterPath="$PROJECT_DIR$/build_markov.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/build_twin_idx.py" beforeDir="false" afterPath="$PROJECT_DIR$/build_twin_idx.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/clean_data/brand_category_map.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/clean_data/marketplace_sample.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/clean_data/master_features_active.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/clean_data/master_features_final.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/clean_data/payments_final_real.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/clean_data/payments_ready_for_ai.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/clean_data/payments_sample.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/clean_data/users.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/optimize_data.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prepare_data.py" beforeDir="false" afterPath="$PROJECT_DIR$/prepare_data.py" afterDir="false" />
-    </list>
+    <list default="true" id="818e91d5-7c85-43a0-8815-af6e0f7e762d" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
